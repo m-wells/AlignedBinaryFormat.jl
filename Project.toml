@@ -3,9 +3,14 @@ uuid = "94fc9360-1a5e-4d84-93be-ddbadb32b3a7"
 authors = ["m-wells <maw461@psu.edu>"]
 version = "0.1.0"
 
-[compat]
-julia = ">= 1.2"
-
 [deps]
 Mmap = "a63ad114-7e13-5084-954f-fe012c677804"
+
+[compat]
+julia = "1.0"
+
+[extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
