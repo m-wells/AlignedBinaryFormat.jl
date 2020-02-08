@@ -6,189 +6,162 @@
 This package provides a simple (yet powerful) interface allowing data (in the form of `Arrays/BitArrays`) to be saved in a simple binary format that can be "memory-mapped" without the use of `reinterpret`.
 This is achieved by aligning the arrays on disk.
 
-## Examples
-```
-julia> using AlignedBinaryFormat
+## Usage Example
 
-julia> temp = tempname()*".abf";
 
-julia> x = rand(Float16,5)
-5-element Array{Float16,1}:
- 0.8955
- 0.01855
- 0.293
- 0.0
- 0.4912
-
-julia> y = rand(Char,3,3,3)
-3×3×3 Array{Char,3}:
-[:, :, 1] =
- '\U96860'  '\Ud14b6'  '\Uc6d65'
- '\Ub3835'  '\U68ab5'  '\Uaa2e6'
- '𑀿'        '\U488c1'  '\Uad6d6'
-
-[:, :, 2] =
- '\U7d113'  '𑀨'        '\U52a26'
- '\Uee4df'  '\U6539d'  '\U6f827'
- '\U13fb5'  '\U5ad2a'  '\U2fd8b'
-
-[:, :, 3] =
- '\U623d5'  '\U16bd4'  '\Ue7eec'
- '\U96515'  '\U9b53a'  '\U45be2'
- '\U6d337'  '\U8e767'  '\U72090'
-
-julia> z = rand(3,5)
-3×5 Array{Float64,2}:
- 0.913549  0.358208  0.961378  0.5539    0.603976
- 0.248744  0.58022   0.643398  0.49535   0.457585
- 0.190859  0.884004  0.130671  0.456976  0.366796
-
-julia> ba = rand(3,5) .< 0.5
-3×5 BitArray{2}:
- 0  0  1  1  1
- 1  1  0  0  0
- 1  0  1  0  1
-
-julia> abfopen(temp, "w") do abf
-       write(abf, "my x array", x)
-       write(abf, "whY array", y)
-       write(abf, "ζ!/b", z)
-       write(abf, "bitmat", ba)
-       end
-
-julia> abf = abfopen(temp, "r")
-AlignedBinaryFormat.AbfFile(IOStream(<file /tmp/jl_TfVT18.abf>), "/tmp/jl_TfVT18.abf", "r", Base.ImmutableDict{String,AlignedBinaryFormat.AbfKey}("bitmat" => AlignedBinaryFormat.AbfKey{2}(520, BitArray{2}, (3, 5)),"ζ!/b" => AlignedBinaryFormat.AbfKey{2}(344, Array{Float64,2}, (3, 5)),"whY array" => AlignedBinaryFormat.AbfKey{3}(168, Array{Char,3}, (3, 3, 3)),"my x array" => AlignedBinaryFormat.AbfKey{1}(84, Array{Float16,1}, (5,))), 14)
-
-julia> read(abf, "bitmat")
-3×5 BitArray{2}:
- 0  0  1  1  1
- 1  1  0  0  0
- 1  0  1  0  1
-
-julia> read(abf, "whY array")
-3×3×3 Array{Char,3}:
-[:, :, 1] =
- '\U96860'  '\Ud14b6'  '\Uc6d65'
- '\Ub3835'  '\U68ab5'  '\Uaa2e6'
- '𑀿'        '\U488c1'  '\Uad6d6'
-
-[:, :, 2] =
- '\U7d113'  '𑀨'        '\U52a26'
- '\Uee4df'  '\U6539d'  '\U6f827'
- '\U13fb5'  '\U5ad2a'  '\U2fd8b'
-
-[:, :, 3] =
- '\U623d5'  '\U16bd4'  '\Ue7eec'
- '\U96515'  '\U9b53a'  '\U45be2'
- '\U6d337'  '\U8e767'  '\U72090'
-
-julia> read(abf, "ζ!/b")
-3×5 Array{Float64,2}:
- 0.913549  0.358208  0.961378  0.5539    0.603976
- 0.248744  0.58022   0.643398  0.49535   0.457585
- 0.190859  0.884004  0.130671  0.456976  0.366796
-
-julia> read(abf, "my x array")
-5-element Array{Float16,1}:
- 0.8955
- 0.01855
- 0.293
- 0.0
- 0.4912
-
-julia> close(abf)
+```julia
+using AlignedBinaryFormat
+temp = tempname()
+abf = abfopen(temp, "w")
+write(abf, "my x array", rand(Float16,4))
+write(abf, "whY array", rand(Char,2,2,2))
+write(abf, "ζ!/b", rand(2,3))
+write(abf, "bitmat", rand(3,2) .< 0.5)
+close(abf)
 ```
 
-## Modify data on disk
+### Do block syntax is supported
+
+
+```julia
+abfopen(temp, "r") do abf
+    print("bitmat = ")
+    show(stdout, MIME("text/plain"), read(abf, "bitmat"))
+    println("\n")
+    
+    print("whY array = ")
+    show(stdout, MIME("text/plain"), read(abf, "whY array"))
+    println("\n")
+    
+    print("ζ!/b = ")
+    show(stdout, MIME("text/plain"), read(abf, "ζ!/b"))
+    println("\n")
+    
+    print("my x array = ")
+    show(stdout, MIME("text/plain"), read(abf, "my x array"))
+    println("\n")
+end
+rm(temp)
+```
+
+    bitmat = 3×2 BitArray{2}:
+     0  1
+     0  1
+     0  0
+    
+    whY array = 2×2×2 Array{Char,3}:
+    [:, :, 1] =
+     '\U812d8'  '𭑂'      
+     '\Ua0341'  '\Uf2784'
+    
+    [:, :, 2] =
+     '\U5c8c4'  '\Ud8b0d'
+     '\Ufb062'  '\U55e4f'
+    
+    ζ!/b = 2×3 Array{Float64,2}:
+     0.62056   0.82266   0.392541
+     0.451849  0.678043  0.996425
+    
+    my x array = 4-element Array{Float16,1}:
+     0.3809
+     0.998 
+     0.8438
+     0.5186
+    
+
+
+### Modify data on disk
 If you want to modify data on disk in place you must provide read and write permission `"r+/w+"`
+
+
+```julia
+temp = tempname()
+abfopen(temp, "w+") do abf
+    write(abf, "x", rand(3,2))
+    x = read(abf, "x")
+    print("x = ")
+    show(stdout, MIME("text/plain"), x)
+    println("\n")
+end
+abfopen(temp, "r+") do abf
+    x = read(abf, "x")
+    x[1] = -10
+    print("x = ")
+    show(stdout, MIME("text/plain"), x)
+end
 ```
-julia> abf = abfopen(temp, "w+")
-AlignedBinaryFormat.AbfFile(IOStream(<file /tmp/jl_9LiLfO>), "/tmp/jl_9LiLfO", "w+", Base.ImmutableDict{String,AlignedBinaryFormat.AbfKey}(), 14)
 
-julia> write(abf, "x", rand(10,5))
+    x = 3×2 Array{Float64,2}:
+     0.516492  0.895526
+     0.750149  0.928451
+     0.626819  0.532503
+    
+    x = 3×2 Array{Float64,2}:
+     -10.0       0.895526
+       0.750149  0.928451
+       0.626819  0.532503
 
-julia> x = read(abf, "x")
-10×5 Array{Float64,2}:
- 0.54849    0.165274  0.247298  0.309551  0.932243
- 0.126986   0.843627  0.713371  0.415387  0.223799
- 0.781115   0.402192  0.900288  0.38551   0.739652
- 0.675185   0.828027  0.820174  0.305257  0.27004
- 0.854511   0.957022  0.267321  0.488723  0.267576
- 0.239777   0.380612  0.348398  0.75667   0.0980679
- 0.0981943  0.322747  0.311123  0.409337  0.621242
- 0.595097   0.797594  0.870286  0.499376  0.579686
- 0.565401   0.130292  0.691589  0.90659   0.729173
- 0.813674   0.773177  0.535425  0.681151  0.0923525
+### You can verify that it actually wrote this to disk
 
-julia> x[1] = -10
--10
 
-julia> x
-10×5 Array{Float64,2}:
- -10.0        0.165274  0.247298  0.309551  0.932243
-   0.126986   0.843627  0.713371  0.415387  0.223799
-   0.781115   0.402192  0.900288  0.38551   0.739652
-   0.675185   0.828027  0.820174  0.305257  0.27004
-   0.854511   0.957022  0.267321  0.488723  0.267576
-   0.239777   0.380612  0.348398  0.75667   0.0980679
-   0.0981943  0.322747  0.311123  0.409337  0.621242
-   0.595097   0.797594  0.870286  0.499376  0.579686
-   0.565401   0.130292  0.691589  0.90659   0.729173
-   0.813674   0.773177  0.535425  0.681151  0.0923525
-
-julia> close(abf)
-
-julia> abf = abfopen(temp, "r")
-AlignedBinaryFormat.AbfFile(IOStream(<file /tmp/jl_9LiLfO>), "/tmp/jl_9LiLfO", "r", Base.ImmutableDict{String,AlignedBinaryFormat.AbfKey}("x" => AlignedBinaryFormat.AbfKey{2}(88, Array{Float64,2}, (10, 5))), 14)
-
-julia> read(abf, "x")
-10×5 Array{Float64,2}:
- -10.0        0.165274  0.247298  0.309551  0.932243
-   0.126986   0.843627  0.713371  0.415387  0.223799
-   0.781115   0.402192  0.900288  0.38551   0.739652
-   0.675185   0.828027  0.820174  0.305257  0.27004
-   0.854511   0.957022  0.267321  0.488723  0.267576
-   0.239777   0.380612  0.348398  0.75667   0.0980679
-   0.0981943  0.322747  0.311123  0.409337  0.621242
-   0.595097   0.797594  0.870286  0.499376  0.579686
-   0.565401   0.130292  0.691589  0.90659   0.729173
-   0.813674   0.773177  0.535425  0.681151  0.0923525
-
-julia> close(abf)
+```julia
+abfopen(temp, "r") do abf
+    x = read(abf, "x")
+    print("x = ")
+    show(stdout, MIME("text/plain"), x)
+end
+rm(temp)
 ```
+
+    x = 3×2 Array{Float64,2}:
+     -10.0       0.895526
+       0.750149  0.928451
+       0.626819  0.532503
 
 ## Why not use `JLD/HDF5`?
-```
-julia> x = rand(Float16,10,3);
-       y = x .< 0.5;
-       z = rand(29);
-       @show typeof(x);
-       @show typeof(y);
-       @show typeof(z);
-typeof(x) = Array{Float16,2}
-typeof(y) = BitArray{2}
-typeof(z) = Array{Float64,1}
+ 1. They do not support memory mapping of any Julia `isbits` primitive type (see [here for supported data types](https://github.com/JuliaIO/HDF5.jl/blob/master/doc/hdf5.md#supported-data-types)).
+ 2. When memory mapping they can often return an array as a `ReinterpretArray` forcing the use of `AbstractArray` in `Type` and `Function` definitions.
 
-julia> using JLD
 
-julia> temp = tempname();
-       jldopen(temp, "w"; mmaparrays=true) do j
-       write(j,"x",x)
-       write(j,"y",y)
-       write(j,"z",z)
-       end
-
-julia> jldopen(temp, "r"; mmaparrays=true) do j
-       @show typeof(read(j,"x"));
-       @show typeof(read(j,"y"));
-       @show typeof(read(j,"z"));
-       end
-typeof(read(j, "x")) = Array{Float16,2}
-typeof(read(j, "y")) = BitArray{2}
-typeof(read(j, "z")) = Base.ReinterpretArray{Float64,1,UInt8,Array{UInt8,1}}
+```julia
+x = rand(Float16,3,2);
+y = x .< 0.5;
+z = rand(29);
+@show typeof(x);
+@show typeof(y);
+@show typeof(z);
 ```
 
-As you can see `z` gets read back as `ReinterpretArray`
+    typeof(x) = Array{Float16,2}
+    typeof(y) = BitArray{2}
+    typeof(z) = Array{Float64,1}
+
+
+
+```julia
+using JLD, HDF5
+temp = tempname()
+jldopen(temp, "w"; mmaparrays=true) do j
+    write(j,"x",x)
+    write(j,"y",y)
+    write(j,"z",z)
+end
+jldopen(temp, "r"; mmaparrays=true) do j
+    @show ismmappable(j["x"])
+    @show typeof(read(j,"x"))
+    @show typeof(read(j,"y"))
+    @show typeof(read(j,"z"))
+end
+rm(temp)
+```
+
+    ismmappable(j["x"]) = false
+    typeof(read(j, "x")) = Array{Float16,2}
+    typeof(read(j, "y")) = BitArray{2}
+    typeof(read(j, "z")) = Base.ReinterpretArray{Float64,1,UInt8,Array{UInt8,1}}
+
+
+As you can see `x` isn't able to be memory mapped and `z` gets read back as `ReinterpretArray`
 
 ## Why not use `JLD2`
 `JLD2` doesn't actually support memory mapping.
@@ -198,17 +171,22 @@ See my comment [here](https://github.com/JuliaIO/JLD2.jl/pull/176#issue-36926044
 
 # File Layout
 As an example lets look use the following arrays.
+
+
 ```julia
-julia> x = rand(Float16,10,3);
-       y = x .< 0.5;
-       z = rand(29);
-       @show typeof(x);
-       @show typeof(y);
-       @show typeof(z);
-typeof(x) = Array{Float16,2}
-typeof(y) = BitArray{2}
-typeof(z) = Array{Float64,1}
+x = rand(Float16,10,3)
+y = x .< 0.5
+z = rand(29)
+@show typeof(x)
+@show typeof(y)
+@show typeof(z);
 ```
+
+    typeof(x) = Array{Float16,2}
+    typeof(y) = BitArray{2}
+    typeof(z) = Array{Float64,1}
+
+
 The file will have the following layout
 * 6 characters (`Char`) indicating endian-ness of the numeric data contained within
     * `"LITTLE"` or `"BIG   "` (this depends on the host machine generating the file, currently conversion between little and big is not supported)
