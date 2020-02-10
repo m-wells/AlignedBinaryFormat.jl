@@ -1,7 +1,7 @@
 using Test
 using AlignedBinaryFormat
-using AlignedBinaryFormat: AbfFile, write_str, read_str, write_type_and_size,
-    read_type_and_size
+using AlignedBinaryFormat: AbfFile, write_str, read_str, write_type, write_size, read_type,
+    read_size
 
 @testset "open/close" begin
     temp = tempname()
@@ -34,16 +34,20 @@ end
         y = rand(20) .< 0.5
         abfopen(temp, "w") do abf
             write_str(abf.io, str)
-            write_type_and_size(abf.io, x)
-            write_type_and_size(abf.io, y)
+            write_type(abf.io, x)
+            write_size(abf.io, x)
+            write_type(abf.io, y)
+            write_size(abf.io, y)
         end
 
         abfopen(temp, "r") do abf
             @test str == read_str(abf.io)
-            t,s = read_type_and_size(abf.io)
+            t = read_type(abf.io)
+            s = read_size(abf.io, t)
             @test typeof(x) == t
             @test size(x) == s
-            t,s = read_type_and_size(abf.io)
+            t = read_type(abf.io)
+            s = read_size(abf.io, t)
             @test typeof(y) == t
             @test size(y) == s
         end
@@ -108,6 +112,24 @@ end
         abfopen(temp, "r") do abf
             blah = read(abf, "blah")
             @test blah[2] == 1
+        end
+
+    finally
+        isfile(temp) && rm(temp)
+    end
+end
+
+@testset "write out strings as data" begin
+    temp = tempname()
+    try
+        blah = join(rand(Char,10))*join(rand(Char,9))
+        abfopen(temp, "w+") do abf
+            write(abf, "blah", blah)
+        end
+
+        abfopen(temp, "r") do abf
+            _blah = read(abf, "blah")
+            @test blah == _blah
         end
 
     finally

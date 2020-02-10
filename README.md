@@ -19,8 +19,13 @@ close(abf)
 
 # do block syntax is supported
 abfopen(temp, "r+") do abf                 # can append to an already created file
-    abf["ζ!/b"] = rand(2,3)                # dictionary like interface
+    abf["ζ!/b"] = rand(2,3)                # alias of write(abf,"ζ!/b",rand(2,3))
     write(abf, "bitmat", rand(3,2) .< 0.5)
+    # can also save strings (although these are not memory mapped), use Vector{Char} for memory mapping
+    write(abf, "log", """
+        this is what I did
+        and how!
+        """)
 end
 
 abf = abfopen(temp, "r")
@@ -29,11 +34,12 @@ abf = abfopen(temp, "r")
 
 
 
-    AlignedBinaryFormat.AbfFile(r <file /tmp/jl_SrHo2P>)
+    AlignedBinaryFormat.AbfFile(r <file /tmp/jl_0PtmzN>)
     ┌────────────┬────────────────────────┬────────────┐
     │   label    │          type          │   status   │
     ├────────────┼────────────────────────┼────────────┤
     │   bitmat   │   BitArray{2}(3, 2)    │ not loaded │
+    │    log     │      String(28,)       │ not loaded │
     │ my x array │  Array{Float16,1}(4,)  │ not loaded │
     │ whY array  │ Array{Char,3}(2, 2, 2) │ not loaded │
     │    ζ!/b    │ Array{Float64,2}(2, 3) │ not loaded │
@@ -41,33 +47,33 @@ abf = abfopen(temp, "r")
 
 
 
-Arrays are not loaded until needed and once loaded the references are stored in a dictionary.
-Using `read` or the `getindex` interface will load the array.
+Using either `read(abf, <label>)` or the `getindex` (which is an alias to `read`) syntax of `abf[<label>]` will load the item stored.
+Loading a `String` copies the `String` into the dictionary while loading `Array`s or `BitArray`s memory map them and store the references in a dictionary within the `AbfFile` structure.
 
 
 ```julia
 @show count(abf["bitmat"])
-read(abf, "my x array")
-abf
+read(abf, "my x array")        # just calling read(abf, label) loads the array
+println(read(abf, "log"))
+show(abf)
 ```
 
-    count(abf["bitmat"]) = 1
-
-
-
-
-
-    AlignedBinaryFormat.AbfFile(r <file /tmp/jl_SrHo2P>)
+    count(abf["bitmat"]) = 4
+    this is what I did
+    and how!
+    
+    AlignedBinaryFormat.AbfFile(r <file /tmp/jl_0PtmzN>)
     ┌────────────┬────────────────────────┬────────────┐
     │   label    │          type          │   status   │
     ├────────────┼────────────────────────┼────────────┤
     │   bitmat   │   BitArray{2}(3, 2)    │   loaded   │
+    │    log     │      String(28,)       │   loaded   │
     │ my x array │  Array{Float16,1}(4,)  │   loaded   │
     │ whY array  │ Array{Char,3}(2, 2, 2) │ not loaded │
     │    ζ!/b    │ Array{Float64,2}(2, 3) │ not loaded │
     └────────────┴────────────────────────┴────────────┘
 
-
+Multiple calls to `read` (or `getindex`) will not remap already loaded arrays but will retrieve the reference from the stored dictionary.
 
 ### Modify data on disk
 If you want to modify data on disk in place you must provide read and write permission `"r+/w+"`
@@ -90,14 +96,14 @@ end
 ```
 
     x = 3×2 Array{Float64,2}:
-     0.255742  0.27344 
-     0.528762  0.222005
-     0.704939  0.6655  
+     0.729037  0.435165
+     0.564481  0.159203
+     0.814773  0.959416
     
     x = 3×2 Array{Float64,2}:
-     -10.0       0.27344 
-       0.528762  0.222005
-       0.704939  0.6655  
+     -10.0       0.435165
+       0.564481  0.159203
+       0.814773  0.959416
 
 ### You can verify that it actually wrote this to disk
 
@@ -111,9 +117,9 @@ end
 ```
 
     x = 3×2 Array{Float64,2}:
-     -10.0       0.27344 
-       0.528762  0.222005
-       0.704939  0.6655  
+     -10.0       0.435165
+       0.564481  0.159203
+       0.814773  0.959416
 
 ## Why not use `JLD/HDF5`?
  1. They do not support memory mapping of any Julia `isbits` primitive type (see [here for supported data types](https://github.com/JuliaIO/HDF5.jl/blob/master/doc/hdf5.md#supported-data-types)).
@@ -166,22 +172,28 @@ See my comment [here](https://github.com/JuliaIO/JLD2.jl/pull/176#issue-36926044
 ---
 
 # File Layout
-As an example lets use the following arrays.
+As an example lets examine what the structure of the following file would look like.
 
 
 ```julia
-x = rand(Float16,10,3)
-y = x .< 0.5
-z = rand(29)
-@show typeof(x)
-@show typeof(y)
-@show typeof(z);
+abfopen(temp, "w+") do abf
+    abf["myX"] = rand(Float16,10,3)
+    abf["whybitarr"] = x .< 0.5
+    abf["log"] = "some log information about this file"
+    abf["somez"] = rand(29)
+    show(abf)
+end;
 ```
 
-    typeof(x) = Array{Float16,2}
-    typeof(y) = BitArray{2}
-    typeof(z) = Array{Float64,1}
-
+    AlignedBinaryFormat.AbfFile(w+ <file /tmp/jl_0PtmzN>)
+    ┌───────────┬─────────────────────────┬────────────┐
+    │   label   │          type           │   status   │
+    ├───────────┼─────────────────────────┼────────────┤
+    │    log    │       String(36,)       │ not loaded │
+    │    myX    │ Array{Float16,2}(10, 3) │ not loaded │
+    │   somez   │  Array{Float64,1}(29,)  │ not loaded │
+    │ whybitarr │    BitArray{2}(3, 2)    │ not loaded │
+    └───────────┴─────────────────────────┴────────────┘
 
 The file will have the following layout
 * 6 characters (`Char`) indicating endian-ness of the numeric data contained within
@@ -190,7 +202,7 @@ For each of the stored `Arrays`
 * an `Int` indicating the length of the key `length(keyname)`
 * the `String` which is the `key` of the array
 * an `Int` indicating the length of `string(T<:Union{Array,BitArray})`
-* the `String` representation of the array, i.e.,  `"Array"` or `"BitArray"`
+* the `String` representation of the "container", i.e.,  `"Array"`, `"BitArray"` or `"String"`
     * there is no arbitrary code evaluation, types are determined via an `ImmutableDict{String,DataType}`
 * for `"Array"`s an `Int` and `string(T)`
 * an `Int` indication the number of dimensions `N`
@@ -198,12 +210,13 @@ For each of the stored `Arrays`
 * the buffer is then **aligned** to `T`
 * the data
 
-So for our example (with the names of the arrays "myX", "whybitarr", and "somez" respectively
+Note: the labels are displayed sorted by label but are written to the file sequentially.
+
 ```
 <BOF> # beginning of file
 LITTLE
 3                               # length of "myX"
-myX                             # label of first array
+myX                             # label of first item
 5                               # length of "Array"
 Array
 7                               # length of "Float16"
@@ -214,7 +227,7 @@ Float16
 ... (alignment spacing)
 <the data>
 9                               # length of "whybitarr"
-whybitarr                       # label of second array
+whybitarr                       # label of second item
 8                               # length of "BitArray"
 BitArray
 2                               # number of dimensions
@@ -222,8 +235,14 @@ BitArray
 3                               # length of dimension 2
 ... (alignment spacing)
 <the data>
+3                               # length of "log"
+log                             # label of third item
+6                               # length of "String"
+String
+36                              # length of "some log information ..."
+some log information ...
 5                               # length of "somez"
-somez                           # label of third array
+somez                           # label of fourth item
 5                               # length of "Array"
 Array
 7                               # length of "Float64"
@@ -237,3 +256,8 @@ Float64
 
 # Acknowledgements
 Early inspiration was drawn from [this gist](https://gist.github.com/dataPulverizer/3dc0af456a427aeb704a437e31299242).
+
+
+```julia
+
+```

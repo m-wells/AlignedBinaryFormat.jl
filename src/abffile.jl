@@ -2,7 +2,7 @@ mutable struct AbfFile
     io::IOStream
     rw::String
     abfkeys::Base.ImmutableDict{String,AbfKey}
-    loaded::Base.ImmutableDict{String,Union{Array,BitArray}}
+    loaded::Base.ImmutableDict{String,Union{Array,BitArray,String}}
     npos::Int64                                 # position of nobjects Int64
 
     function AbfFile(filename::String, rw::String)
@@ -10,7 +10,7 @@ mutable struct AbfFile
         rw ∈ allowed_rw || error("Unrecognized option '", rw, "'\nAllowed options are [",
                                  join(allowed_rw, ", "), "] as (read permissions are needed to memory map)")
         abfkeys=Base.ImmutableDict{String,AbfKey}()
-        loaded=Base.ImmutableDict{String,Union{Array,BitArray}}()
+        loaded=Base.ImmutableDict{String,Union{Array,BitArray,String}}()
 
         io = open(filename, rw)
 
@@ -62,7 +62,7 @@ function abfopen(f::Function, args...)
     end
 end
 
-function Base.write(abf::AbfFile, k::String, x::AbstractArray)
+function Base.write(abf::AbfFile, k::String, x)
     seekend(abf.io)
     abfkey = _write(abf.io::IOStream, k, x)
     addabfkey!(abf, k, abfkey)
@@ -78,7 +78,11 @@ function Base.read(abf::AbfFile, k::String)
     k ∈ keys(abf.loaded) && return abf.loaded[k]
     abfkey = abf.abfkeys[k]
     seek(abf.io, abfkey.pos)
-    x = Mmap.mmap(abf.io, abfkey.T, abfkey.dims)
+    if abfkey.T == String
+        x = read_str(abf.io, first(abfkey.dims))
+    else
+        x = Mmap.mmap(abf.io, abfkey.T, abfkey.dims)
+    end
     abf.loaded = Base.ImmutableDict(abf.loaded, k => x)
     return x
 end

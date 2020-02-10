@@ -11,6 +11,13 @@ function ImmutableDict(x::Pair, ys::Vararg{Pair})
     return d
 end
 
+function ImmutableDict(x::Base.ImmutableDict{String}, ys::Vararg{Pair})
+    for y in ys
+        x = Base.ImmutableDict(x, y)
+    end
+    return x
+end
+
 # this is used to avoid evaluation of arbitrary code read from a file
 #TODO maybe do this programatically?
 const TYPELOOKUP = ImmutableDict(string(Float16) => Float16,
@@ -29,8 +36,10 @@ const TYPELOOKUP = ImmutableDict(string(Float16) => Float16,
                                  string(Int128) => Int128,
                                  string(UInt128) => UInt128)
 
-const ARRAYLOOKUP = ImmutableDict(string(Array) => Array,
-                                  string(BitArray) => BitArray)
+const ARRAYLOOKUP = ImmutableDict(Base.ImmutableDict{String,Any}(),
+                                  string(Array) => Array,
+                                  string(BitArray) => BitArray,
+                                  string(String) => String)
 
 function write_str(io::IOStream, str::Vararg{String})
     for s in str
@@ -40,14 +49,15 @@ function write_str(io::IOStream, str::Vararg{String})
     nothing
 end
 
-function read_str(io::IOStream)
-    n = read(io, Int64)
+function read_str(io::IOStream, n::Int)
     k = Vector{Char}(undef,n)
     @inbounds for i in 1:n
         k[i] = read(io, Char)
     end
     return join(k)
 end
+
+read_str(io::IOStream) = read_str(io, read(io, Int64))
 
 const LIT_ENDIAN = 0x04030201
 const BIG_ENDIAN = 0x01020304
@@ -80,6 +90,7 @@ function _sizeof(::Type{BitArray{N}}, sz::NTuple{N,Int64}) where N
 end
 
 _sizeof(::Type{A}, sz::NTuple{N,Int64}) where {T,N,A<:AbstractArray{T,N}} = sizeof(T)*prod(sz)
+_sizeof(::Type{String}, sz::Tuple{Int64}) = sizeof(Char)*first(sz)
 
 #_sizeof(x::AbstractArray) = _sizeof(typeof(x), size(x))
 
@@ -88,13 +99,14 @@ struct AbfKey{N}
     T::DataType
     dims::NTuple{N,Int64}
 
-    function AbfKey(io::IOStream, ::Type{A}, dims::NTuple{N,Int64}) where {T,N,A<:AbstractArray{T,N}}
-        new{N}(position(io), A, dims)
-    end
+    # used when writing
+    AbfKey(pos::Int64, x::A) where A<:AbstractArray = new{ndims(A)}(pos, A, size(x))
 
-    function AbfKey(pos::Int64, x::A) where A<:AbstractArray
-        new{ndims(A)}(pos, A, size(x))
-    end
+    # used when reading
+    AbfKey(io::IOStream, ::Type{A}, dims::NTuple{N,Int64}) where {A,N} = new{N}(position(io), A, dims)
+
+    # used when writing
+    AbfKey(io::IOStream, x::AbstractString) = new{1}(position(io), String, (length(x),))
 end
 
 Base.show(io::IO, a::AbfKey) = print(io, a.T, a.dims)
