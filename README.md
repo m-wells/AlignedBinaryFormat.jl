@@ -15,59 +15,58 @@ temp = tempname()
 abf = abfopen(temp, "w")
 write(abf, "my x array", rand(Float16,4))
 write(abf, "whY array", rand(Char,2,2,2))
-write(abf, "ζ!/b", rand(2,3))
-write(abf, "bitmat", rand(3,2) .< 0.5)
 close(abf)
+
+# do block syntax is supported
+abfopen(temp, "r+") do abf                 # can append to an already created file
+    abf["ζ!/b"] = rand(2,3)                # dictionary like interface
+    write(abf, "bitmat", rand(3,2) .< 0.5)
+end
+
+abf = abfopen(temp, "r")
 ```
 
-### Do block syntax is supported
+
+
+
+    AlignedBinaryFormat.AbfFile(r <file /tmp/jl_SrHo2P>)
+    ┌────────────┬────────────────────────┬────────────┐
+    │   label    │          type          │   status   │
+    ├────────────┼────────────────────────┼────────────┤
+    │   bitmat   │   BitArray{2}(3, 2)    │ not loaded │
+    │ my x array │  Array{Float16,1}(4,)  │ not loaded │
+    │ whY array  │ Array{Char,3}(2, 2, 2) │ not loaded │
+    │    ζ!/b    │ Array{Float64,2}(2, 3) │ not loaded │
+    └────────────┴────────────────────────┴────────────┘
+
+
+
+Arrays are not loaded until needed and once loaded the references are stored in a dictionary.
+Using `read` or the `getindex` interface will load the array.
 
 
 ```julia
-abfopen(temp, "r") do abf
-    print("bitmat = ")
-    show(stdout, MIME("text/plain"), read(abf, "bitmat"))
-    println("\n")
-    
-    print("whY array = ")
-    show(stdout, MIME("text/plain"), read(abf, "whY array"))
-    println("\n")
-    
-    print("ζ!/b = ")
-    show(stdout, MIME("text/plain"), read(abf, "ζ!/b"))
-    println("\n")
-    
-    print("my x array = ")
-    show(stdout, MIME("text/plain"), read(abf, "my x array"))
-    println("\n")
-end
-rm(temp)
+@show count(abf["bitmat"])
+read(abf, "my x array")
+abf
 ```
 
-    bitmat = 3×2 BitArray{2}:
-     0  1
-     0  1
-     0  0
-    
-    whY array = 2×2×2 Array{Char,3}:
-    [:, :, 1] =
-     '\U812d8'  '𭑂'      
-     '\Ua0341'  '\Uf2784'
-    
-    [:, :, 2] =
-     '\U5c8c4'  '\Ud8b0d'
-     '\Ufb062'  '\U55e4f'
-    
-    ζ!/b = 2×3 Array{Float64,2}:
-     0.62056   0.82266   0.392541
-     0.451849  0.678043  0.996425
-    
-    my x array = 4-element Array{Float16,1}:
-     0.3809
-     0.998 
-     0.8438
-     0.5186
-    
+    count(abf["bitmat"]) = 1
+
+
+
+
+
+    AlignedBinaryFormat.AbfFile(r <file /tmp/jl_SrHo2P>)
+    ┌────────────┬────────────────────────┬────────────┐
+    │   label    │          type          │   status   │
+    ├────────────┼────────────────────────┼────────────┤
+    │   bitmat   │   BitArray{2}(3, 2)    │   loaded   │
+    │ my x array │  Array{Float16,1}(4,)  │   loaded   │
+    │ whY array  │ Array{Char,3}(2, 2, 2) │ not loaded │
+    │    ζ!/b    │ Array{Float64,2}(2, 3) │ not loaded │
+    └────────────┴────────────────────────┴────────────┘
+
 
 
 ### Modify data on disk
@@ -75,7 +74,6 @@ If you want to modify data on disk in place you must provide read and write perm
 
 
 ```julia
-temp = tempname()
 abfopen(temp, "w+") do abf
     write(abf, "x", rand(3,2))
     x = read(abf, "x")
@@ -92,14 +90,14 @@ end
 ```
 
     x = 3×2 Array{Float64,2}:
-     0.516492  0.895526
-     0.750149  0.928451
-     0.626819  0.532503
+     0.255742  0.27344 
+     0.528762  0.222005
+     0.704939  0.6655  
     
     x = 3×2 Array{Float64,2}:
-     -10.0       0.895526
-       0.750149  0.928451
-       0.626819  0.532503
+     -10.0       0.27344 
+       0.528762  0.222005
+       0.704939  0.6655  
 
 ### You can verify that it actually wrote this to disk
 
@@ -110,13 +108,12 @@ abfopen(temp, "r") do abf
     print("x = ")
     show(stdout, MIME("text/plain"), x)
 end
-rm(temp)
 ```
 
     x = 3×2 Array{Float64,2}:
-     -10.0       0.895526
-       0.750149  0.928451
-       0.626819  0.532503
+     -10.0       0.27344 
+       0.528762  0.222005
+       0.704939  0.6655  
 
 ## Why not use `JLD/HDF5`?
  1. They do not support memory mapping of any Julia `isbits` primitive type (see [here for supported data types](https://github.com/JuliaIO/HDF5.jl/blob/master/doc/hdf5.md#supported-data-types)).
@@ -140,7 +137,6 @@ z = rand(29);
 
 ```julia
 using JLD, HDF5
-temp = tempname()
 jldopen(temp, "w"; mmaparrays=true) do j
     write(j,"x",x)
     write(j,"y",y)
@@ -170,7 +166,7 @@ See my comment [here](https://github.com/JuliaIO/JLD2.jl/pull/176#issue-36926044
 ---
 
 # File Layout
-As an example lets look use the following arrays.
+As an example lets use the following arrays.
 
 
 ```julia

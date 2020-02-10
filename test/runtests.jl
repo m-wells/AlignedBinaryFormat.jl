@@ -62,7 +62,7 @@ end
         chars = rand(Char, 11,2)
 
         abfopen(temp, "w") do abf
-            write(abf, "f16", f16)
+            abf["f16"] = f16
             write(abf, "μy1234_", μy1234_)
             write(abf, "chars", chars)
             write(abf, "myx", myx)
@@ -70,7 +70,7 @@ end
         end
 
         abfopen(temp, "r") do abf
-            @test μy1234_ == read(abf, "μy1234_")
+            @test μy1234_ == abf["μy1234_"]
             @test blah == read(abf, "blah")
             @test myx == read(abf, "myx")
             @test chars == read(abf, "chars")

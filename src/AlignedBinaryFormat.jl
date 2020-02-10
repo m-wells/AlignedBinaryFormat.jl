@@ -97,84 +97,9 @@ struct AbfKey{N}
     end
 end
 
+Base.show(io::IO, a::AbfKey) = print(io, a.T, a.dims)
+
 include("read_write.jl")
-
-mutable struct AbfFile
-    io::IOStream
-    filename::String
-    rw::String
-    objs::Base.ImmutableDict{String,AbfKey}
-    npos::Int64                                 # position of nobjects Int64
-
-    function AbfFile(filename::String, rw::String)
-        allowed_rw = ("r", "r+", "w", "w+")
-        rw ∈ allowed_rw || error("Unrecognized option '", rw, "'\nAllowed options are [",
-                                 join(allowed_rw, ", "), "] as (read permissions are needed to memory map)")
-        objs=Base.ImmutableDict{String,AbfKey}()
-
-        io = open(filename, rw)
-
-        if rw ∈ ("w", "w+")
-            endian = machine_endian()
-            write_str(io, endian)
-        else
-            endian = read_str(io)
-            if endian != machine_endian()
-                error("file is encoded with different endianness than this machine\n",
-                      "expected ", machine_endian(), " got ", endian)
-            end
-        end
-
-        new(io, filename, rw, objs, position(io))
-    end
-end
-
-function addabfkey!(abf::AbfFile, k::String, abfkey::AbfKey)
-    abf.objs = Base.ImmutableDict(abf.objs, k => abfkey)
-end
-
-function abfopen(filename::String, rw::String)
-    abf = AbfFile(filename, rw)
-    if rw ∈ ("w", "w+")
-        write(abf.io, Int64(0))     # zero objects in file
-    else
-        n = read(abf.io, Int64)
-        for _ in 1:n
-            k, abfkey = _read(abf.io)
-            addabfkey!(abf, k, abfkey)
-        end
-    end
-    return abf
-end
-
-Base.close(abf::AbfFile) = close(abf.io)
-
-function abfopen(f::Function, args...)
-    abf = abfopen(args...)
-
-    try
-        f(abf)
-    finally
-        close(abf)
-    end
-end
-
-function Base.write(abf::AbfFile, k::String, x::AbstractArray)
-    seekend(abf.io)
-    abfkey = _write(abf.io::IOStream, k, x)
-    addabfkey!(abf, k, abfkey)
-
-    mark(abf.io)
-    seek(abf.io, abf.npos)
-    write(abf.io, length(abf.objs))
-    reset(abf.io)
-    nothing
-end
-
-function Base.read(abf::AbfFile, k::String)
-    abfkey = abf.objs[k]
-    seek(abf.io, abfkey.pos)
-    Mmap.mmap(abf.io, abfkey.T, abfkey.dims)
-end
+include("abffile.jl")
 
 end
