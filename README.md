@@ -3,8 +3,11 @@
 [![Coverage Status](https://coveralls.io/repos/github/m-wells/AlignedBinaryFormat.jl/badge.svg?branch=master)](https://coveralls.io/github/m-wells/AlignedBinaryFormat.jl?branch=master)
 [![codecov](https://codecov.io/gh/m-wells/AlignedBinaryFormat.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/m-wells/AlignedBinaryFormat.jl)
 
-This package provides a simple (yet powerful) interface allowing data (in the form of `Arrays/BitArrays`) to be saved in a simple binary format that can be "memory-mapped" without the use of `reinterpret`.
-This is achieved by aligning the arrays on disk.
+This package provides a simple (yet powerful) interface to handle [memory mapped](https://docs.julialang.org/en/v1/stdlib/Mmap/#Memory-mapped-I/O-1) data.
+The "data" must be in the form of `Array`s and `BitArray`s) (although I may later support a `Table` interface).
+The `eltype` of the `Array` must be a [Julia primitive type](https://docs.julialang.org/en/v1/manual/types/#Primitive-Types-1).
+When accessing the data we avoid the use of `reinterpret` by **aligning** the arrays on disk.
+Writing `String`s to labels is also supported but these are not memory mapped (use `Vector{Char}` if you need this functionality.
 
 ## Usage Example
 
@@ -12,16 +15,18 @@ This is achieved by aligning the arrays on disk.
 ```julia
 using AlignedBinaryFormat
 temp = tempname()
-abf = abfopen(temp, "w")
+# writing data out
+abf = abfopen(temp, "w")    # "w" is used to write only, memory mapping requires w+
 write(abf, "my x array", rand(Float16,4))
 write(abf, "whY array", rand(Char,2,2,2))
 close(abf)
 
 # do block syntax is supported
-abfopen(temp, "r+") do abf                 # can append to an already created file
+abfopen(temp, "r+") do abf    # "r+" allows permits writing to an existing file
     abf["ζ!/b"] = rand(2,3)                # alias of write(abf,"ζ!/b",rand(2,3))
     write(abf, "bitmat", rand(3,2) .< 0.5)
-    # can also save strings (although these are not memory mapped), use Vector{Char} for memory mapping
+    # can also save strings (although these are not memory mapped)
+    #     use Vector{Char} for memory mapping
     write(abf, "log", """
         this is what I did
         and how!
@@ -34,7 +39,7 @@ abf = abfopen(temp, "r")
 
 
 
-    AlignedBinaryFormat.AbfFile(r <file /tmp/jl_0PtmzN>)
+    AlignedBinaryFormat.AbfFile(r <file /tmp/jl_zgwlDI>)
     ┌────────────┬────────────────────────┬────────────┐
     │   label    │          type          │   status   │
     ├────────────┼────────────────────────┼────────────┤
@@ -47,8 +52,10 @@ abf = abfopen(temp, "r")
 
 
 
-Using either `read(abf, <label>)` or the `getindex` (which is an alias to `read`) syntax of `abf[<label>]` will load the item stored.
-Loading a `String` copies the `String` into the dictionary while loading `Array`s or `BitArray`s memory map them and store the references in a dictionary within the `AbfFile` structure.
+The two methods for accessing the data are `read` and `getindex`, which is simply an alias of `read` and allows for the dictionary-like syntax.
+When data is first accessed a reference to the item is cached in a dictionary contained within the `AbfFile` instance.
+This permits the same reference to be returned without remapping the same data multiple times due to repeated `read` calls.
+Strings are not memory mapped and are copied directly into the cache dictionary.
 
 
 ```julia
@@ -62,7 +69,7 @@ show(abf)
     this is what I did
     and how!
     
-    AlignedBinaryFormat.AbfFile(r <file /tmp/jl_0PtmzN>)
+    AlignedBinaryFormat.AbfFile(r <file /tmp/jl_zgwlDI>)
     ┌────────────┬────────────────────────┬────────────┐
     │   label    │          type          │   status   │
     ├────────────┼────────────────────────┼────────────┤
@@ -73,10 +80,22 @@ show(abf)
     │    ζ!/b    │ Array{Float64,2}(2, 3) │ not loaded │
     └────────────┴────────────────────────┴────────────┘
 
-Multiple calls to `read` (or `getindex`) will not remap already loaded arrays but will retrieve the reference from the stored dictionary.
+In the example above, `bitmat` and `my x array` are memory mapped and `log` is cached.
+Doing `abf["bitmat"]` or `read(abf, "bitmat")` will return the same reference to `bitmat`.
+
+
+```julia
+bitmat1 = abf["bitmat"]
+bitmat2 = read(abf, "bitmat")
+@show bitmat1 === bitmat2;
+```
+
+    bitmat1 === bitmat2 = true
+
 
 ### Modify data on disk
-If you want to modify data on disk in place you must provide read and write permission `"r+/w+"`
+If you want to modify data on disk in place you must provide read and write permission `"r+/w+"`.
+Read permission is required
 
 
 ```julia
@@ -96,14 +115,14 @@ end
 ```
 
     x = 3×2 Array{Float64,2}:
-     0.729037  0.435165
-     0.564481  0.159203
-     0.814773  0.959416
+     0.288488  0.435817
+     0.332386  0.162485
+     0.376674  0.69332 
     
     x = 3×2 Array{Float64,2}:
-     -10.0       0.435165
-       0.564481  0.159203
-       0.814773  0.959416
+     -10.0       0.435817
+       0.332386  0.162485
+       0.376674  0.69332 
 
 ### You can verify that it actually wrote this to disk
 
@@ -117,13 +136,13 @@ end
 ```
 
     x = 3×2 Array{Float64,2}:
-     -10.0       0.435165
-       0.564481  0.159203
-       0.814773  0.959416
+     -10.0       0.435817
+       0.332386  0.162485
+       0.376674  0.69332 
 
 ## Why not use `JLD/HDF5`?
- 1. They do not support memory mapping of any Julia `isbits` primitive type (see [here for supported data types](https://github.com/JuliaIO/HDF5.jl/blob/master/doc/hdf5.md#supported-data-types)).
- 2. When memory mapping they can often return an array as a `ReinterpretArray` forcing the use of `AbstractArray` in `Type` and `Function` definitions.
+ 1. They do not support memory mapping of **any** Julia `isbits` primitive type (see [here for supported data types](https://github.com/JuliaIO/HDF5.jl/blob/master/doc/hdf5.md#supported-data-types)).
+ 2. When memory mapping they often return an array as a `ReinterpretArray` forcing the use of `AbstractArray` in `Type` and `Function` definitions.
 
 
 ```julia
@@ -163,7 +182,7 @@ rm(temp)
     typeof(read(j, "z")) = Base.ReinterpretArray{Float64,1,UInt8,Array{UInt8,1}}
 
 
-As you can see `x` isn't able to be memory mapped and `z` gets read back as `ReinterpretArray`
+As you can see `x::Matrix{Float16}` isn't able to be memory mapped and `z::Vector{Float64}` gets read back as `ReinterpretArray`
 
 ## Why not use `JLD2`
 `JLD2` doesn't actually support memory mapping.
@@ -185,7 +204,7 @@ abfopen(temp, "w+") do abf
 end;
 ```
 
-    AlignedBinaryFormat.AbfFile(w+ <file /tmp/jl_0PtmzN>)
+    AlignedBinaryFormat.AbfFile(w+ <file /tmp/jl_zgwlDI>)
     ┌───────────┬─────────────────────────┬────────────┐
     │   label   │          type           │   status   │
     ├───────────┼─────────────────────────┼────────────┤
