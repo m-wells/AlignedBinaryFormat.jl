@@ -14,16 +14,21 @@ Writing `String`s to labels is also supported but these are not memory mapped (u
 
 ```julia
 using AlignedBinaryFormat
-temp = tempname()
+temp = tempname();
+```
+
+
+```julia
 # writing data out
-abf = abfopen(temp, "w")    # "w" is used to write only, memory mapping requires w+
-write(abf, "my x array", rand(Float16,4))
-write(abf, "whY array", rand(Char,2,2,2))
-close(abf)
+abfopen(temp, "w") do abf   # "w" is used to write only, memory mapping requires w+
+    write(abf, "my x array", rand(Float16,4))
+    write(abf, "whY array", rand(Char,2,2,2))
+    #close(abf)
+end
 
 # do block syntax is supported
-abfopen(temp, "r+") do abf    # "r+" allows permits writing to an existing file
-    abf["ζ!/b"] = rand(2,3)                # alias of write(abf,"ζ!/b",rand(2,3))
+abfopen(temp, "r+") do abf    # "r+" permits writing to an existing file
+    abf["ζ!/b"] = rand(2,3)   # alias of write(abf,"ζ!/b",rand(2,3))
     write(abf, "bitmat", rand(3,2) .< 0.5)
     # can also save strings (although these are not memory mapped)
     #     use Vector{Char} for memory mapping
@@ -39,7 +44,7 @@ abf = abfopen(temp, "r")
 
 
 
-    AlignedBinaryFormat.AbfFile(r <file /tmp/jl_zgwlDI>)
+    AlignedBinaryFormat.AbfFile(r <file /tmp/jl_ZRUDdP>)
     ┌────────────┬────────────────────────┬────────────┐
     │   label    │          type          │   status   │
     ├────────────┼────────────────────────┼────────────┤
@@ -65,11 +70,11 @@ println(read(abf, "log"))
 show(abf)
 ```
 
-    count(abf["bitmat"]) = 4
+    count(abf["bitmat"]) = 5
     this is what I did
     and how!
     
-    AlignedBinaryFormat.AbfFile(r <file /tmp/jl_zgwlDI>)
+    AlignedBinaryFormat.AbfFile(r <file /tmp/jl_ZRUDdP>)
     ┌────────────┬────────────────────────┬────────────┐
     │   label    │          type          │   status   │
     ├────────────┼────────────────────────┼────────────┤
@@ -93,52 +98,156 @@ bitmat2 = read(abf, "bitmat")
     bitmat1 === bitmat2 = true
 
 
-### Modify data on disk
-If you want to modify data on disk in place you must provide read and write permission `"r+/w+"`.
-Read permission is required
+## Close does not unlink references you may have made
+Memory mapping persists after the file has been closed and is only unlinked once the reference is garbage collected.
+It is recommended to use the **do-block** syntax to avoid unintended access.
 
 
 ```julia
+abf = abfopen(temp, "w+")
+write(abf, "x", rand(10))
+x = read(abf, "x")
+print("x = ")
+show(stdout, MIME("text/plain"), x)
+println("\n")
+show(abf)
+println("\n")
+close(abf)
+show(abf)
+print("\nx = ")
+show(stdout, MIME("text/plain"), x)
+println("\n")
+```
+
+    x = 10-element Array{Float64,1}:
+     0.8766317610545198  
+     0.6018622110847007  
+     0.11262697157468327 
+     0.5516201293467733  
+     0.25634887547005913 
+     0.049131542030021125
+     0.27887342636826573 
+     0.537853459201793   
+     0.600647015064192   
+     0.18098735180440917 
+    
+    AlignedBinaryFormat.AbfFile(w+ <file /tmp/jl_ZRUDdP>)
+    ┌───────┬───────────────────────┬────────┐
+    │ label │         type          │ status │
+    ├───────┼───────────────────────┼────────┤
+    │   x   │ Array{Float64,1}(10,) │ loaded │
+    └───────┴───────────────────────┴────────┘
+    
+    AlignedBinaryFormat.AbfFile(closed <file /tmp/jl_ZRUDdP>)
+    ┌───────┬──────┬────────┐
+    │ label │ type │ status │
+    ├───────┼──────┼────────┤
+    └───────┴──────┴────────┘
+    x = 10-element Array{Float64,1}:
+     0.8766317610545198  
+     0.6018622110847007  
+     0.11262697157468327 
+     0.5516201293467733  
+     0.25634887547005913 
+     0.049131542030021125
+     0.27887342636826573 
+     0.537853459201793   
+     0.600647015064192   
+     0.18098735180440917 
+    
+
+
+# File permissions and modifying data on-disk
+
+| mode | read data | modify data | add data | description                          |
+|------|:---------:|:-----------:|:--------:|--------------------------------------|
+| `r`  | yes       | no          | no       | read only mode                       |
+| `r+` | yes       | yes         | yes      | read/write existing file             |
+| `w`  | no        | no          | yes      | overwrites existing file, write only |
+| `w+` | yes       | yes         | yes      | overwrites existing file, read/write |
+| `a`  | no        | no          | yes      | modify existing file, create if it doesn't exist, write only |
+| `a+` | yes       | yes         | yes      | modify existing file, create if it doesn't exist, read/write |
+
+Read permission is required to memory map so `w` can only write data to the file but can not read it back in to memory-map.
+Memory-mapped arrays opened using `r` can only be read.
+If the file is opened with `r+/w+` arrays can be modified in place.
+
+
+```julia
+println("file opened with \"w\"")
+abfopen(temp, "w") do abf
+    write(abf, "x", rand(3,2))
+    try
+        x = read(abf, "x")
+    catch e
+        println(e.msg)
+    end
+end
+println("\nfile opened with \"w+\"")
 abfopen(temp, "w+") do abf
     write(abf, "x", rand(3,2))
     x = read(abf, "x")
-    print("x = ")
-    show(stdout, MIME("text/plain"), x)
-    println("\n")
+    @show x[1]
+    x[1] = -1
+    @show x[1]
 end
+println("\nfile opened with \"r+\"")
 abfopen(temp, "r+") do abf
-    x = read(abf, "x")
-    x[1] = -10
-    print("x = ")
-    show(stdout, MIME("text/plain"), x)
+    abf["x"][1] = 3
+    @show abf["x"][1]
+    write(abf, "y", rand(2))
+    @show abf["y"]
 end
-```
-
-    x = 3×2 Array{Float64,2}:
-     0.288488  0.435817
-     0.332386  0.162485
-     0.376674  0.69332 
-    
-    x = 3×2 Array{Float64,2}:
-     -10.0       0.435817
-       0.332386  0.162485
-       0.376674  0.69332 
-
-### You can verify that it actually wrote this to disk
-
-
-```julia
+println("\nfile opened with \"r\"")
 abfopen(temp, "r") do abf
     x = read(abf, "x")
-    print("x = ")
-    show(stdout, MIME("text/plain"), x)
-end
+    @show x[1]
+    @show abf["y"]
+    try
+        x[1] = 3
+    catch e
+        println(e)
+    end
+end;
+println("\nfile opened with \"a\"")
+abfopen(temp, "a") do abf
+    try
+        x = read(abf, "x")
+    catch e
+        println(e.msg)
+    end
+    write(abf, "z", rand(3))
+end;
+println("\nfile opened with \"a+\"")
+abfopen(temp, "a+") do abf
+    @show read(abf, "x")[1]
+    @show read(abf, "z")[1]
+end;
 ```
 
-    x = 3×2 Array{Float64,2}:
-     -10.0       0.435817
-       0.332386  0.162485
-       0.376674  0.69332 
+    file opened with "w"
+    file is not readable, opened with: w
+    
+    file opened with "w+"
+    x[1] = 0.3921332512881919
+    x[1] = -1.0
+    
+    file opened with "r+"
+    (abf["x"])[1] = 3.0
+    abf["y"] = [0.3103104232481271, 0.8723026640351457]
+    
+    file opened with "r"
+    x[1] = 3.0
+    abf["y"] = [0.3103104232481271, 0.8723026640351457]
+    ReadOnlyMemoryError()
+    
+    file opened with "a"
+    file is not readable, opened with: a
+    
+    file opened with "a+"
+    (read(abf, "x"))[1] = 3.0
+    (read(abf, "z"))[1] = 0.11647360741323487
+
 
 ## Why not use `JLD/HDF5`?
  1. They do not support memory mapping of **any** Julia `isbits` primitive type (see [here for supported data types](https://github.com/JuliaIO/HDF5.jl/blob/master/doc/hdf5.md#supported-data-types)).
@@ -204,7 +313,7 @@ abfopen(temp, "w+") do abf
 end;
 ```
 
-    AlignedBinaryFormat.AbfFile(w+ <file /tmp/jl_zgwlDI>)
+    AlignedBinaryFormat.AbfFile(w+ <file /tmp/jl_ZRUDdP>)
     ┌───────────┬─────────────────────────┬────────────┐
     │   label   │          type           │   status   │
     ├───────────┼─────────────────────────┼────────────┤
@@ -214,10 +323,12 @@ end;
     │ whybitarr │    BitArray{2}(3, 2)    │ not loaded │
     └───────────┴─────────────────────────┴────────────┘
 
-The file will have the following layout
-* 6 characters (`Char`) indicating endian-ness of the numeric data contained within
-    * `"LITTLE"` or `"BIG   "` (this depends on the host machine generating the file, currently conversion between little and big is not supported)
-For each of the stored `Arrays`
+The file will have the following layout for each of the stored `Arrays`
+* a `UInt8` indicating endian-ness of the numeric data contained within
+    * `UInt8(0)` indicates that the following data is little-endian
+    * `UInt8(255)` indicates that the following data is big-endian
+    * this depends on the host machine generating the file
+    * currently conversion between little- and big-endian is not supported
 * an `Int` indicating the length of the key `length(keyname)`
 * the `String` which is the `key` of the array
 * an `Int` indicating the length of `string(T<:Union{Array,BitArray})`
@@ -233,7 +344,7 @@ Note: the labels are displayed sorted by label but are written to the file seque
 
 ```
 <BOF> # beginning of file
-LITTLE
+0x00                            # UInt8(0) - Little Endian
 3                               # length of "myX"
 myX                             # label of first item
 5                               # length of "Array"
@@ -245,6 +356,7 @@ Float16
 3                               # length of dimension 2
 ... (alignment spacing)
 <the data>
+0x00                            # UInt8(0) - Little Endian
 9                               # length of "whybitarr"
 whybitarr                       # label of second item
 8                               # length of "BitArray"
@@ -254,12 +366,14 @@ BitArray
 3                               # length of dimension 2
 ... (alignment spacing)
 <the data>
+0x00                            # UInt8(0) - Little Endian
 3                               # length of "log"
 log                             # label of third item
 6                               # length of "String"
 String
 36                              # length of "some log information ..."
 some log information ...
+0x00                            # UInt8(0) - Little Endian
 5                               # length of "somez"
 somez                           # label of fourth item
 5                               # length of "Array"

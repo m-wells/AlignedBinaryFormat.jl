@@ -1,26 +1,28 @@
-#-------------------------------------------------------------------------------------------
-function write_type(io::IOStream, x::BitArray)
+function write_type(io::IOStream, data::BitArray)
     write_str(io, string(BitArray))
-    write(io, Int64(ndims(x)))
+    write(io, Int64(ndims(data)))
 end
 
-function write_type(io::IOStream, x::AbstractArray)
-    write_str(io, string(Array), string(eltype(x)))
-    write(io, Int64(ndims(x)))
+function write_type(io::IOStream, data::AbstractArray)
+    write_str(io, string(Array), string(eltype(data)))
+    write(io, Int64(ndims(data)))
 end
 
 write_type(io::IOStream, x::AbstractString) = write_str(io, string(String))
-
-write_size(io::IOStream, x::AbstractArray) = write(io, Int64.(size(x))...)
-
 
 read_type(io::IOStream, ::Type{BitArray}) = BitArray{read(io, Int64)}
 read_type(io::IOStream, ::Type{Array}) = Array{TYPELOOKUP[read_str(io)], read(io,Int64)}
 read_type(io::IOStream, ::Type{String}) = String
 read_type(io::IOStream) = read_type(io, ARRAYLOOKUP[read_str(io)])
 
-read_size(io::IOStream, x::Type{A}) where {T,N,A<:AbstractArray{T,N}} = ntuple(i -> read(io, Int64), Val(N))
-read_size(io::IOStream, x::Type{String}) = (read(io, Int64),)
+#---------------------------------------------------------------------------------------------------
+
+write_size(io::IOStream, x::AbstractArray) = write(io, Int64.(size(x))...)
+
+function read_size(io::IOStream, data::Type{A}) where {T,N,A<:AbstractArray{T,N}}
+    ntuple(i -> read(io, Int64), Val(N))
+end
+read_size(io::IOStream, str::Type{String}) = (read(io, Int64),)
 
 #---------------------------------------------------------------------------------------------------
 
@@ -45,37 +47,43 @@ align(io::IOStream, ::Type{A}) where {T,A<:Array{T}} = align(io, sizeof(T))
 align(io::IOStream, ::Type{String}) = nothing
 align(io::IOStream, ::A) where A<:AbstractArray = align(io,A)
 
-function _write(io::IOStream, k::String, x::A) where A<:Union{Array,BitArray}
-    # label
-    write_str(io, k)
+#---------------------------------------------------------------------------------------------------
 
-    # data header
-    write_type(io, x)
-    write_size(io, x)
+function _write(io::IOStream, label::String, data::A) where A<:Union{Array,BitArray}
+    write_endian(io)
+    write_str(io, label)
 
-    # data
-    align(io, x)
-    abfkey = AbfKey(io, A, size(x))
-    write(io, x)
+    write_type(io, data)
+    write_size(io, data)
+
+    align(io, data)
+    abfkey = AbfKey(io, A, size(data))
+    write(io, data)
     return abfkey
 end
 
 # everything but actually mmaping
 # returns AbfKey
 function _read(io::IOStream)
-    k = read_str(io)
-    A = read_type(io)
-    dims = read_size(io, A)
-    align(io, A)
-    abfkey = AbfKey(io, A, dims)
-    skip(io, _sizeof(A, dims))
-    return (k, abfkey)
+    endian = read_endian(io)
+    label = read_str(io)
+
+    type = read_type(io)
+    dims = read_size(io, type)
+
+    align(io, type)
+    abfkey = AbfKey(io, type, dims)
+    skip(io, _sizeof(type, dims))
+    return (label, abfkey)
 end
 
-function _write(io::IOStream, k::String, x::AbstractString)
-    write_str(io, k)
-    write_type(io, x)
-    abfkey = AbfKey(io, x)
-    write_str(io, x)
+function _write(io::IOStream, label::String, str::AbstractString)
+    write_endian(io)
+    write_str(io, label)
+
+    write_type(io, str)
+
+    abfkey = AbfKey(io, str)
+    write_str(io, str)
     return abfkey
 end

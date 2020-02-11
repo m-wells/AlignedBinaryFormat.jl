@@ -3,29 +3,12 @@ mutable struct AbfFile
     rw::String
     abfkeys::Base.ImmutableDict{String,AbfKey}
     loaded::Base.ImmutableDict{String,Union{Array,BitArray,String}}
-    npos::Int64                                 # position of nobjects Int64
 
     function AbfFile(filename::String, rw::String)
-        allowed_rw = ("r", "r+", "w", "w+")
-        rw ∈ allowed_rw || error("Unrecognized option '", rw, "'\nAllowed options are [",
-                                 join(allowed_rw, ", "), "] as (read permissions are needed to memory map)")
+        io = open(filename, rw)
         abfkeys=Base.ImmutableDict{String,AbfKey}()
         loaded=Base.ImmutableDict{String,Union{Array,BitArray,String}}()
-
-        io = open(filename, rw)
-
-        if rw ∈ ("w", "w+")
-            endian = machine_endian()
-            write_str(io, endian)
-        else
-            endian = read_str(io)
-            if endian != machine_endian()
-                error("file is encoded with different endianness than this machine\n",
-                      "expected ", machine_endian(), " got ", endian)
-            end
-        end
-
-        new(io, rw, abfkeys, loaded, position(io))
+        new(io, rw, abfkeys, loaded)
     end
 end
 
@@ -38,11 +21,9 @@ end
 
 function abfopen(filename::String, rw::String)
     abf = AbfFile(filename, rw)
-    if rw ∈ ("w", "w+")
-        write(abf.io, Int64(0))     # zero objects in file
-    else
-        n = read(abf.io, Int64)
-        for _ in 1:n
+    if isreadable(abf.io)
+        seekstart(abf.io)
+        while !eof(abf.io)
             k, abfkey = _read(abf.io)
             addabfkey!(abf, k, abfkey)
         end
@@ -50,7 +31,12 @@ function abfopen(filename::String, rw::String)
     return abf
 end
 
-Base.close(abf::AbfFile) = close(abf.io)
+function Base.close(abf::AbfFile)
+    abf.rw = "closed"
+    abf.abfkeys = Base.ImmutableDict{String,AbfKey}()
+    abf.loaded = Base.ImmutableDict{String,Union{Array,BitArray,String}}()
+    close(abf.io)
+end
 
 function abfopen(f::Function, args...)
     abf = abfopen(args...)
@@ -66,15 +52,11 @@ function Base.write(abf::AbfFile, k::String, x)
     seekend(abf.io)
     abfkey = _write(abf.io::IOStream, k, x)
     addabfkey!(abf, k, abfkey)
-
-    mark(abf.io)
-    seek(abf.io, abf.npos)
-    write(abf.io, length(abf.abfkeys))
-    reset(abf.io)
     nothing
 end
 
 function Base.read(abf::AbfFile, k::String)
+    isreadable(abf.io) || error("file is not readable, opened with: ", abf.rw)
     k ∈ keys(abf.loaded) && return abf.loaded[k]
     abfkey = abf.abfkeys[k]
     seek(abf.io, abfkey.pos)
@@ -86,6 +68,18 @@ function Base.read(abf::AbfFile, k::String)
     abf.loaded = Base.ImmutableDict(abf.loaded, k => x)
     return x
 end
+
+Base.getindex(abf::AbfFile, k::String) = read(abf, k)
+
+function Base.setindex!(abf::AbfFile, v, k::String)
+    if k ∈ keys(abf)
+        error("cannot overwrite exists key. You may have wanted to do \"abf[", k,
+              "] .= x\" instead (element assignment)")
+    end
+    write(abf, k, v)
+end
+
+#---------------------------------------------------------------------------------------------------
 
 function cpad(str, n::Int)
     nspace = (n - length(str))/2
@@ -129,12 +123,3 @@ function Base.show(io::IO, abf::T) where T<:AbfFile
     print(io, indent, "└─", repeat('─', keypad) , "─┴─", repeat('─', typepad),  "─┴─", repeat('─', loadpad),  "─┘")
 end
 
-Base.getindex(abf::AbfFile, k::String) = read(abf, k)
-
-function Base.setindex!(abf::AbfFile, v, k::String)
-    if k ∈ keys(abf)
-        error("cannot overwrite exists key. You may have wanted to do \"abf[", k,
-              "] .= x\" instead (element assignment)")
-    end
-    write(abf, k, v)
-end
