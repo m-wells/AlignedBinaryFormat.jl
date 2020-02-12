@@ -1,7 +1,7 @@
 name = "AlignedBinaryFormat"
 uuid = "94fc9360-1a5e-4d84-93be-ddbadb32b3a7"
 authors = ["m-wells <maw461@psu.edu>"]
-version = "0.4.1"
+version = "0.4.2"
 
 [deps]
 Mmap = "a63ad114-7e13-5084-954f-fe012c677804"
