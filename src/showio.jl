@@ -3,8 +3,21 @@ function cpad(str, n::Int)
     repeat(" ", floor(Int, nspace))*str*repeat(" ", ceil(Int, nspace))
 end
 
+function _rw(abf::AbfFile)
+    isopen(abf.io) || return "[closed]"
+    if isreadable(abf.io) && iswritable(abf.io)
+        return "[read/write]"
+    elseif isreadable(abf.io)
+        return "[read]"
+    elseif iswritable(abf.io)
+        return "[write]"
+    else
+        return ""
+    end
+end
+
 function Base.show(io::IO, abf::T) where T<:AbfFile
-    println(io, T, "(", abf.rw, " ", abf.io.name, ")")
+    println(io, T, "(", _rw(abf), " ", abf.io.name, ")")
 
     ktitle = "label"
     ttitle = "type"
@@ -30,7 +43,7 @@ function Base.show(io::IO, abf::T) where T<:AbfFile
     println(io, indent, "├─", repeat('─', keypad) , "─┼─", repeat('─', typepad),  "─┼─", repeat('─', loadpad),  "─┤")
 
     for (k,t) in sort(collect(abf.abfkeys), by=first)
-        print(io,indent, "│ ", cpad(k, keypad), " │ ", cpad(string(t), typepad), " │ ")
+        print(io,indent, "│ ", rpad(k, keypad), " │ ", rpad(string(t), typepad), " │ ")
         if k in keys(abf.loaded)
             println(io, cpad("loaded", loadpad), " │")
         else
