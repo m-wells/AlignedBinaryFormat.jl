@@ -3,6 +3,30 @@ using Mmap
 
 export abfopen
 
+#---------------------------------------------------------------------------------------------------
+
+struct ReadOnlyError <: Exception
+    io::IOStream
+end
+
+function Base.showerror(io::IO, e::ReadOnlyError)
+    print(io, "isreadable(", e.io.name, ") = ", isreadable(io))
+end
+
+check_readable(io::IOStream) = isreadable(io) || throw(ReadOnlyError(io))
+
+struct WriteOnlyError <: Exception
+    io::IOStream
+end
+
+function Base.showerror(io::IO, e::WriteOnlyError)
+    print(io, "iswritable(", e.io.name, ") = ", iswritable(io))
+end
+
+check_writable(io::IOStream) = iswritable(io) || throw(WriteOnlyError(io))
+
+#---------------------------------------------------------------------------------------------------
+
 function ImmutableDict(x::Pair, ys::Vararg{Pair})
     d = Base.ImmutableDict(x)
     for y in ys
@@ -41,52 +65,7 @@ const ARRAYLOOKUP = ImmutableDict(Base.ImmutableDict{String,Any}(),
                                   string(BitArray) => BitArray,
                                   string(String) => String)
 
-function write_str(io::IOStream, str::Vararg{String})
-    for s in str
-        write(io, Int64(length(s)))
-        write(io, s)
-    end
-    nothing
-end
-
-function read_str(io::IOStream, n::Int)
-    k = Vector{Char}(undef,n)
-    @inbounds for i in 1:n
-        k[i] = read(io, Char)
-    end
-    return join(k)
-end
-
-read_str(io::IOStream) = read_str(io, read(io, Int64))
-
-const LIT_ENDIAN = 0x04030201
-const BIG_ENDIAN = 0x01020304
-
-const LIT_ENDFLAG = UInt8(0)
-const BIG_ENDFLAG = UInt8(255)
-
-function write_endian(io::IOStream)
-    if Base.ENDIAN_BOM == LIT_ENDIAN
-        write(io, LIT_ENDFLAG)
-    elseif Base.ENDIAN_BOM == BIG_ENDIAN
-        write(io, BIG_ENDFLAG)
-    else
-        error("ENDIAN_BOM of ", Base.ENDIAN_BOM, " not recognized")
-    end
-end
-
-function read_endian(io::IOStream)
-    endflag = read(io, UInt8)
-    if endflag == LIT_ENDFLAG
-        endian = LIT_ENDIAN
-    elseif endflag == BIG_ENDFLAG
-        endian = BIG_ENDIAN
-    else
-        error("ENDIAN FLAG of ", endflag, " not recognized")
-    end
-    endian == Base.ENDIAN_BOM || error("endian does not match machine endian")
-    return endian
-end
+#---------------------------------------------------------------------------------------------------
 
 ## from https://github.com/JuliaLang/julia/blob/master/base/bitarray.jl (2020/01/20)
 # notes: bits are stored in contiguous chunks
@@ -102,9 +81,10 @@ function _sizeof(::Type{BitArray{N}}, sz::NTuple{N,Int64}) where N
 end
 
 _sizeof(::Type{A}, sz::NTuple{N,Int64}) where {T,N,A<:AbstractArray{T,N}} = sizeof(T)*prod(sz)
-_sizeof(::Type{String}, sz::Tuple{Int64}) = sizeof(Char)*first(sz)
+_sizeof(::Type{String}, n::Int64) = sizeof(Char)*n
+_sizeof(s::String) = length(s)*sizeof(Char)
 
-#_sizeof(x::AbstractArray) = _sizeof(typeof(x), size(x))
+#---------------------------------------------------------------------------------------------------
 
 struct AbfKey{N}
     pos::Int64
@@ -113,17 +93,21 @@ struct AbfKey{N}
 
     # used when writing
     AbfKey(pos::Int64, x::A) where A<:AbstractArray = new{ndims(A)}(pos, A, size(x))
+    AbfKey(io::IOStream, x::AbstractString) = new{1}(position(io), String, (1,))
 
     # used when reading
-    AbfKey(io::IOStream, ::Type{A}, dims::NTuple{N,Int64}) where {A,N} = new{N}(position(io), A, dims)
-
-    # used when writing
-    AbfKey(io::IOStream, x::AbstractString) = new{1}(position(io), String, (length(x),))
+    AbfKey(io::IOStream, ::Type{A}, dims::NTuple{N,Int64}
+          ) where {T,N,A<:AbstractArray{T,N}} = new{N}(position(io), A, dims)
+    AbfKey(io::IOStream, ::Type{String}) = new{1}(position(io), String, (1,))
 end
 
 Base.show(io::IO, a::AbfKey) = print(io, a.T, a.dims)
 
-include("read_write.jl")
-include("abffile.jl")
+#---------------------------------------------------------------------------------------------------
+
+include("./endian.jl")
+include("./read_write.jl")
+include("./abffile.jl")
+include("./showio.jl")
 
 end

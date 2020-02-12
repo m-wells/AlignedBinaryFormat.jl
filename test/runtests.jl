@@ -123,13 +123,16 @@ end
     temp = tempname()
     try
         blah = join(rand(Char,10))*join(rand(Char,9))
+        x = rand(20,4)
         abfopen(temp, "w+") do abf
             write(abf, "blah", blah)
+            abf["x"] = x
         end
 
         abfopen(temp, "r") do abf
             _blah = read(abf, "blah")
             @test blah == _blah
+            @test x == abf["x"]
         end
 
     finally
