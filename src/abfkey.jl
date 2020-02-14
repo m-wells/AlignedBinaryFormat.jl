@@ -68,18 +68,18 @@ numchars(x::Int) = Int64(x/sizeof(Char))
 
 #---------------------------------------------------------------------------------------------------
 
-struct Serialized{T}
+struct AbfSerializer{T}
     x::T
 end
 
-struct Deserialized
+struct AbfDeserializer
     str::String
 end
 
 
 struct AbfKey
     pos::Int64
-    T::Union{DataType, Deserialized}
+    T::Union{DataType, AbfDeserializer}
     shape::Tuple{Vararg{Int64}}
     nbytes::Int64
 
@@ -103,6 +103,6 @@ struct AbfKey
 
     #-----------------------------------------------------------------------------------------------
     
-    AbfKey(pos::Int64, T::Union{DataType,Serialized}, nbytes::Int) = new(pos, T, (-1,), nbytes)
-    AbfKey(pos::Int64, T::Deserialized, nbytes::Int) = new(pos, T, (-1,), nbytes)
+    AbfKey(pos::Int64, T::Union{DataType,AbfSerializer}, nbytes::Int) = new(pos, T, (-1,), nbytes)
+    AbfKey(pos::Int64, T::AbfDeserializer, nbytes::Int) = new(pos, T, (-1,), nbytes)
 end

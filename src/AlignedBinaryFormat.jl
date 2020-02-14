@@ -4,29 +4,29 @@ using Printf
 using Mmap
 using Serialization
 
-export abfopen, Serialized
+export abfopen, AbfSerializer
 
 #---------------------------------------------------------------------------------------------------
 
-struct ReadOnlyError <: Exception
+struct AbfReadError <: Exception
     io::IOStream
 end
 
-function Base.showerror(io::IO, e::ReadOnlyError)
-    print(io, "isreadable(", e.io.name, ") = ", isreadable(io))
+function Base.showerror(io::IO, e::T) where T<:AbfReadError
+    print(io, T, ": isreadable(", e.io.name, ") = ", isreadable(e.io))
 end
 
-check_readable(io::IOStream) = isreadable(io) || throw(ReadOnlyError(io))
+check_readable(io::IOStream) = isreadable(io) ? nothing : throw(AbfReadError(io))
 
-struct WriteOnlyError <: Exception
+struct AbfWriteError <: Exception
     io::IOStream
 end
 
-function Base.showerror(io::IO, e::WriteOnlyError)
-    print(io, "iswritable(", e.io.name, ") = ", iswritable(io))
-end
+#function Base.showerror(io::IO, e::AbfWriteError)
+#    print(io, "iswritable(", e.io.name, ") = ", iswritable(e.io))
+#end
 
-check_writable(io::IOStream) = iswritable(io) || throw(WriteOnlyError(io))
+check_writable(io::IOStream) = iswritable(io) ? nothing : throw(AbfWriteError(io))
 
 #---------------------------------------------------------------------------------------------------
 

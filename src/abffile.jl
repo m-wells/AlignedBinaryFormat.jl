@@ -65,7 +65,7 @@ function Base.read(abf::AbfFile, k::String)
         x = read_str(abf.io)
     elseif abfkey.T == DataType
         x = deserialize(abf.io)
-    elseif isa(abfkey.T, Deserialized)
+    elseif isa(abfkey.T, AbfDeserializer)
         x = getfield(deserialize(abf.io), :x)
     else
         x = Mmap.mmap(abf.io, abfkey.T, abfkey.shape)

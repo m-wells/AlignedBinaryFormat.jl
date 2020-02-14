@@ -59,21 +59,24 @@ end
 
 abfopen(temp, "r+") do abf
     write(abf, "type", Bar)
-    write(abf, "foo", Serialized(Foo(rand(3), -1)))
+    write(abf, "foo", AbfSerializer(Foo(rand(3), -1)))
 end
 
 abf = abfopen(temp, "r")
 ```
 
+    string(AbfSerializer) = "AbfSerializer"
 
 
 
-    AlignedBinaryFormat.AbfFile([read] <file /tmp/jl_OArXMO>)
+
+
+    AlignedBinaryFormat.AbfFile([read] <file /tmp/jl_jrx5dO>)
     ┌────────────┬──────────────────┬───────────┬────────┬────────────┐
     │   label    │       type       │   shape   │ bytes  │   status   │
     ├────────────┼──────────────────┼───────────┼────────┼────────────┤
     │ bitmat     │ BitArray{2}      │ (3, 2)    │ <8B>   │ unloaded   │
-    │ foo        │ Foo              │ (-1,)     │ <118B> │ unloaded   │
+    │ foo        │ Foo              │ (-1,)     │ <121B> │ unloaded   │
     │ log        │ String           │ (28,)     │ <112B> │ unloaded   │
     │ my x array │ Array{Float16,1} │ (4,)      │ <8B>   │ unloaded   │
     │ type       │ DataType         │ (-1,)     │ <23B>  │ unloaded   │
@@ -97,16 +100,16 @@ println(read(abf, "log"))
 show(abf)
 ```
 
-    count(abf["bitmat"]) = 2
+    count(abf["bitmat"]) = 5
     this is what I did
     and how!
     
-    AlignedBinaryFormat.AbfFile([read] <file /tmp/jl_OArXMO>)
+    AlignedBinaryFormat.AbfFile([read] <file /tmp/jl_jrx5dO>)
     ┌────────────┬──────────────────┬───────────┬────────┬────────────┐
     │   label    │       type       │   shape   │ bytes  │   status   │
     ├────────────┼──────────────────┼───────────┼────────┼────────────┤
     │ bitmat     │ BitArray{2}      │ (3, 2)    │ <8B>   │ loaded     │
-    │ foo        │ Foo              │ (-1,)     │ <118B> │ unloaded   │
+    │ foo        │ Foo              │ (-1,)     │ <121B> │ unloaded   │
     │ log        │ String           │ (28,)     │ <112B> │ loaded     │
     │ my x array │ Array{Float16,1} │ (4,)      │ <8B>   │ loaded     │
     │ type       │ DataType         │ (-1,)     │ <23B>  │ unloaded   │
@@ -150,18 +153,18 @@ println("\n")
 ```
 
     x = 10-element Array{Float64,1}:
-     0.13117086919645993
-     0.8140523381099063 
-     0.44152928499795685
-     0.6776307667284676 
-     0.2542185344974299 
-     0.6641164907956227 
-     0.6446525613063578 
-     0.17166524697749908
-     0.0775201232187761 
-     0.6548927372122209 
+     0.41808342392430364
+     0.8340965780634206 
+     0.4422525925297145 
+     0.7464876087842214 
+     0.8760053500303144 
+     0.8812312947613306 
+     0.12907825453926614
+     0.8227926275555029 
+     0.5770610771209626 
+     0.2427376128034029 
     
-    AlignedBinaryFormat.AbfFile([read/write] <file /tmp/jl_OArXMO>)
+    AlignedBinaryFormat.AbfFile([read/write] <file /tmp/jl_jrx5dO>)
     ┌───────┬──────────────────┬───────┬───────┬────────┐
     │ label │       type       │ shape │ bytes │ status │
     ├───────┼──────────────────┼───────┼───────┼────────┤
@@ -169,23 +172,23 @@ println("\n")
     └───────┴──────────────────┴───────┴───────┴────────┘
     
     
-    AlignedBinaryFormat.AbfFile([closed] <file /tmp/jl_OArXMO>)
+    AlignedBinaryFormat.AbfFile([closed] <file /tmp/jl_jrx5dO>)
     ┌───────┬──────┬───────┬───────┬────────┐
     │ label │ type │ shape │ bytes │ status │
     ├───────┼──────┼───────┼───────┼────────┤
     └───────┴──────┴───────┴───────┴────────┘
     
     x = 10-element Array{Float64,1}:
-     0.13117086919645993
-     0.8140523381099063 
-     0.44152928499795685
-     0.6776307667284676 
-     0.2542185344974299 
-     0.6641164907956227 
-     0.6446525613063578 
-     0.17166524697749908
-     0.0775201232187761 
-     0.6548927372122209 
+     0.41808342392430364
+     0.8340965780634206 
+     0.4422525925297145 
+     0.7464876087842214 
+     0.8760053500303144 
+     0.8812312947613306 
+     0.12907825453926614
+     0.8227926275555029 
+     0.5770610771209626 
+     0.2427376128034029 
     
 
 
@@ -258,27 +261,27 @@ end;
 ```
 
     file opened with "w"
-    AlignedBinaryFormat.ReadOnlyError(IOStream(<file /tmp/jl_OArXMO>))
+    AlignedBinaryFormat.ReadOnlyError(IOStream(<file /tmp/jl_jrx5dO>))
     
     file opened with "w+"
-    x[1] = 0.8475538319109697
+    x[1] = 0.9897101065968341
     x[1] = -1.0
     
     file opened with "r+"
     (abf["x"])[1] = 3.0
-    abf["y"] = [0.5593607069994619, 0.9602697380386047]
+    abf["y"] = [0.8188509909345121, 0.7005578254412208]
     
     file opened with "r"
     x[1] = 3.0
-    abf["y"] = [0.5593607069994619, 0.9602697380386047]
+    abf["y"] = [0.8188509909345121, 0.7005578254412208]
     ReadOnlyMemoryError()
     
     file opened with "a"
-    AlignedBinaryFormat.ReadOnlyError(IOStream(<file /tmp/jl_OArXMO>))
+    AlignedBinaryFormat.ReadOnlyError(IOStream(<file /tmp/jl_jrx5dO>))
     
     file opened with "a+"
     (read(abf, "x"))[1] = 3.0
-    (read(abf, "z"))[1] = 0.14952197365579378
+    (read(abf, "z"))[1] = 0.07216051054053385
 
 
 ## Why not use `JLD/HDF5`?
@@ -345,7 +348,7 @@ abfopen(temp, "w+") do abf
 end;
 ```
 
-    AlignedBinaryFormat.AbfFile([read/write] <file /tmp/jl_OArXMO>)
+    AlignedBinaryFormat.AbfFile([read/write] <file /tmp/jl_jrx5dO>)
     ┌───────────┬──────────────────┬─────────┬────────┬────────────┐
     │   label   │       type       │  shape  │ bytes  │   status   │
     ├───────────┼──────────────────┼─────────┼────────┼────────────┤

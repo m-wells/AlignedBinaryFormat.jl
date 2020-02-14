@@ -29,7 +29,7 @@ function Base.show(io::IO, a::AbfKey)
     print_bytes(io, a.nbytes)
 end
 
-Base.show(io::IO, d::Deserialized) = print(io, d.str)
+Base.show(io::IO, d::AbfDeserializer) = print(io, d.str)
 
 function cpad(str, n::Int)
     nspace = (n - length(str))/2

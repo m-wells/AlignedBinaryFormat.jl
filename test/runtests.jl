@@ -1,6 +1,7 @@
 using Test
 using AlignedBinaryFormat
-using AlignedBinaryFormat: AbfFile, write_str, read_str, write_type, read_type
+using AlignedBinaryFormat: AbfFile, write_str, read_str, write_type, read_type, AbfReadError,
+                           AbfWriteError
 
 @testset "open/close" begin
     temp = tempname()
@@ -152,7 +153,7 @@ end
         abfopen(temp, "w+") do abf
             write(abf, "bar", Foo)
             abf["x"] = x
-            write(abf, "foo", Serialized(y))
+            write(abf, "foo", AbfSerializer(y))
         end
 
         abfopen(temp, "r") do abf
@@ -169,6 +170,28 @@ end
     end
 end
 
+@testset "exception handling" begin
+    temp = tempname()
+    try
+        x = rand(20,4)
+        abfopen(temp, "w") do abf
+            abf["x"] = x
+            @test_throws AbfReadError abf["x"]
+        end
+        abfopen(temp, "r") do abf
+            @test_throws AbfWriteError begin
+                abf["y"] = x
+            end
+        end
+
+    finally
+        isfile(temp) && rm(temp)
+    end
+
+end
+
+
+
 # not much of a test set but it will atleast catch method errors
 @testset "show" begin
     temp = tempname()
@@ -183,6 +206,12 @@ end
             @test x == sprint(show,abf)
             x = sprint(show, abf.abfkeys["x"])
             @test x == sprint(show,abf.abfkeys["x"])
+
+            x = sprint(showerror, AbfReadError(abf.io))
+            @test x == sprint(showerror, AbfReadError(abf.io))
+
+            x = sprint(showerror, AbfWriteError(abf.io))
+            @test x == sprint(showerror, AbfWriteError(abf.io))
         end
 
     finally
