@@ -76,7 +76,6 @@ struct AbfDeserializer
     str::String
 end
 
-
 struct AbfKey
     pos::Int64
     T::Union{DataType, AbfDeserializer}

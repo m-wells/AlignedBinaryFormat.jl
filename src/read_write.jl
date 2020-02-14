@@ -37,7 +37,9 @@ end
 write_type(io::IOStream, data::T) where T<:Union{BitArray,Array} = write_str(io, string(T))
 write_type(io::IOStream, x::AbstractString) = write_str(io, string(String))
 write_type(io::IOStream, x::DataType) = write_str(io, string(DataType))
-write_type(io::IOStream, x::T) where T<:AbfSerializer = write_str(io, string(T))
+function write_type(io::IOStream, x::AbfSerializer{T}) where T
+    write_str(io, "AbfSerializer{"*string(T)*'}')
+end
 
 #read_type(io::IOStream, ::Type{BitArray}) = BitArray{read(io, Int64)}
 #read_type(io::IOStream, ::Type{Array}) = Array{TYPELOOKUP[read_str(io)], read(io,Int64)}
@@ -70,8 +72,7 @@ function read_type(io::IOStream)
     occursin(r"^BitArray", x) && return parse_type_bitarray(x)
     x == "String" && return String
     x == "DataType" && return DataType
-    @show string(AbfSerializer)
-    startswith(x, string(AbfSerializer)) && return parse_type_serialized(x)
+    occursin(r"^AbfSerializer", x) && return parse_type_serialized(x)
     error("the following type is not recognized: ", x)
 end
 
