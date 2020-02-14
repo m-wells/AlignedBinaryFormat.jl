@@ -1,3 +1,36 @@
+function print_bytes(io, x::Int)
+    _first = true
+    for (v,p) in PREFIXES
+        if x ≥ v
+            if _first
+                @printf(io, "<%.1f", x/v)
+            else
+                @printf(io, "<%.1f", x/v)
+            end
+            return print(io, p, "B>")
+        end
+        _first = false
+    end
+
+    return @printf(io, "<%.0fB>", x)
+end
+
+function Base.show(io::IO, a::AbfKey)
+    print(io, a.T)
+    print(io, " ")
+    if a.T <: AbstractArray
+        print(io, "(")
+        for i in a.shape
+            print(io, i, ",")
+        end
+        print(io, ")")
+    end
+    print(io, " ")
+    print_bytes(io, a.nbytes)
+end
+
+Base.show(io::IO, d::Deserialized) = print(io, d.str)
+
 function cpad(str, n::Int)
     nspace = (n - length(str))/2
     repeat(" ", floor(Int, nspace))*str*repeat(" ", ceil(Int, nspace))
@@ -16,40 +49,63 @@ function _rw(abf::AbfFile)
     end
 end
 
+function tabline(io, items, padding::Vector{Int}, align=fill('r', length(items));
+                 indent = "", left = "│ ", center = " │ ", right = " │")
+    length(items) == length(padding) || error("!!!")
+    n = length(items)
+    print(io, indent, left)
+    for i in 1:n
+        if isa(items[i], Char)
+            print(io, repeat(items[i], padding[i]))
+        else
+            if align[i] == 'l'
+                print(io, lpad(items[i], padding[i]))
+            elseif align[i] == 'c'
+                print(io, cpad(items[i], padding[i]))
+            elseif align[i] == 'r'
+                print(io, rpad(items[i], padding[i]))
+            else
+                error("do not recognize alignment parameter ", align[i])
+            end
+        end
+
+        i == n ? println(io, right) : print(io, center)
+    end
+end
+
 function Base.show(io::IO, abf::T) where T<:AbfFile
     println(io, T, "(", _rw(abf), " ", abf.io.name, ")")
 
-    ktitle = "label"
-    ttitle = "type"
-    ltitle = "status"
-    keypad = length(ktitle)
-    typepad = length(ttitle)
-    loadpad = length(ltitle)
+    colnames = ("label", "type", "shape", "bytes", "status")
+    padding = [length.(colnames)...]
     
-    for (k,t) in abf.abfkeys
-        keypad = max(keypad, length(string(k)))
-        typepad = max(typepad, length(string(t)))
+    for (k,abfkey) in abf.abfkeys
+        padding[1] = max(padding[1], length(string(k)))
+        padding[2] = max(padding[2], length(string(abfkey.T)))
+        padding[3] = max(padding[3], length(string(abfkey.shape)))
+        padding[4] = max(padding[4], length(sprint(print_bytes, abfkey.nbytes)))
         if k in keys(abf.loaded)
-            loadpad = max(loadpad, length("loaded"))
+            padding[5] = max(padding[5], length("loaded"))
         else
-            loadpad = max(loadpad, length("not loaded"))
+            padding[5] = max(padding[5], length("not loaded"))
         end
     end
 
     indent = ""
 
-    println(io, indent, "┌─", repeat('─', keypad) , "─┬─", repeat('─', typepad),  "─┬─", repeat('─', loadpad),  "─┐")
-    println(io, indent, "│ ", cpad(ktitle, keypad), " │ ", cpad(ttitle, typepad), " │ ", cpad(ltitle, loadpad), " │")
-    println(io, indent, "├─", repeat('─', keypad) , "─┼─", repeat('─', typepad),  "─┼─", repeat('─', loadpad),  "─┤")
+    dashes = ('─','─','─','─','─')
+    tabline(io, dashes, padding; indent = indent, left="┌─", center="─┬─", right="─┐")
+    tabline(io, colnames, padding, fill('c', length(colnames)); indent = indent)
+    tabline(io, dashes, padding; indent = indent, left="├─", center="─┼─", right="─┤")
 
-    for (k,t) in sort(collect(abf.abfkeys), by=first)
-        print(io,indent, "│ ", rpad(k, keypad), " │ ", rpad(string(t), typepad), " │ ")
+    for (k,abfkey) in sort(collect(abf.abfkeys), by=first)
         if k in keys(abf.loaded)
-            println(io, cpad("loaded", loadpad), " │")
+            cols = (k, abfkey.T, abfkey.shape, sprint(print_bytes, abfkey.nbytes), "loaded")
         else
-            println(io, cpad("not loaded", loadpad), " │")
+            cols = (k, abfkey.T, abfkey.shape, sprint(print_bytes, abfkey.nbytes), "unloaded")
         end
+        tabline(io, cols, padding)
     end
-    print(io, indent, "└─", repeat('─', keypad) , "─┴─", repeat('─', typepad),  "─┴─", repeat('─', loadpad),  "─┘")
+    tabline(io, dashes, padding; indent = indent, left="└─", center="─┴─", right="─┘")
 end
 

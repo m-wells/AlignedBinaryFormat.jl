@@ -1,11 +1,12 @@
 mutable struct AbfFile
     io::IOStream
     abfkeys::Base.ImmutableDict{String,AbfKey}
-    loaded::Base.ImmutableDict{String,Union{Array,BitArray,String}}
+    loaded::Base.ImmutableDict{String,Any}
+    #loaded::Base.ImmutableDict{String,Union{Array,BitArray,String}}
 
     function AbfFile(io::IOStream)
         abfkeys=Base.ImmutableDict{String,AbfKey}()
-        loaded=Base.ImmutableDict{String,Union{Array,BitArray,String}}()
+        loaded=Base.ImmutableDict{String,Any}()
         new(io, abfkeys, loaded)
     end
 
@@ -24,7 +25,7 @@ function abfopen(filename::String, rw::String)
     if isreadable(abf.io)
         seekstart(abf.io)
         while !eof(abf.io)
-            k, abfkey = _read(abf.io)
+            k, abfkey = abfread(abf.io)
             addabfkey!(abf, k, abfkey)
         end
     end
@@ -33,7 +34,7 @@ end
 
 function Base.close(abf::AbfFile)
     abf.abfkeys = Base.ImmutableDict{String,AbfKey}()
-    abf.loaded = Base.ImmutableDict{String,Union{Array,BitArray,String}}()
+    abf.loaded = Base.ImmutableDict{String,Any}()
     close(abf.io)
 end
 
@@ -50,7 +51,7 @@ end
 function Base.write(abf::AbfFile, k::String, x)
     check_writable(abf.io)
     seekend(abf.io)
-    abfkey = _write(abf.io::IOStream, k, x)
+    abfkey = abfwrite(abf.io::IOStream, k, x)
     addabfkey!(abf, k, abfkey)
     nothing
 end
@@ -62,8 +63,12 @@ function Base.read(abf::AbfFile, k::String)
     seek(abf.io, abfkey.pos)
     if abfkey.T == String
         x = read_str(abf.io)
+    elseif abfkey.T == DataType
+        x = deserialize(abf.io)
+    elseif isa(abfkey.T, Deserialized)
+        x = getfield(deserialize(abf.io), :x)
     else
-        x = Mmap.mmap(abf.io, abfkey.T, abfkey.dims)
+        x = Mmap.mmap(abf.io, abfkey.T, abfkey.shape)
     end
     abf.loaded = Base.ImmutableDict(abf.loaded, k => x)
     return x

@@ -1,10 +1,12 @@
 name = "AlignedBinaryFormat"
 uuid = "94fc9360-1a5e-4d84-93be-ddbadb32b3a7"
 authors = ["m-wells <maw461@psu.edu>"]
-version = "0.4.2"
+version = "0.4.3"
 
 [deps]
 Mmap = "a63ad114-7e13-5084-954f-fe012c677804"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 
 [compat]
 julia = "1.0"

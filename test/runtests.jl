@@ -1,7 +1,6 @@
 using Test
 using AlignedBinaryFormat
-using AlignedBinaryFormat: AbfFile, write_str, read_str, write_type, write_size, read_type,
-    read_size
+using AlignedBinaryFormat: AbfFile, write_str, read_str, write_type, read_type
 
 @testset "open/close" begin
     temp = tempname()
@@ -119,7 +118,7 @@ end
     end
 end
 
-@testset "write out strings as data" begin
+@testset "read/write strings as data" begin
     temp = tempname()
     try
         blah = join(rand(Char,10))*join(rand(Char,9))
@@ -139,6 +138,59 @@ end
         isfile(temp) && rm(temp)
     end
 end
+
+struct Foo
+    x::Vector{Float64}
+    y::Int64
+end
+
+@testset "read/write datatypes/serialized" begin
+    temp = tempname()
+    try
+        x = rand(20,4)
+        y = Foo(rand(3), 2)
+        abfopen(temp, "w+") do abf
+            write(abf, "bar", Foo)
+            abf["x"] = x
+            write(abf, "foo", Serialized(y))
+        end
+
+        abfopen(temp, "r") do abf
+            @test x == abf["x"]
+            foo = read(abf, "foo")
+            @test typeof(foo) == typeof(y)
+            for f in fieldnames(Foo)
+                @test getfield(foo, f) == getfield(y, f)
+            end
+        end
+
+    finally
+        isfile(temp) && rm(temp)
+    end
+end
+
+# not much of a test set but it will atleast catch method errors
+@testset "show" begin
+    temp = tempname()
+    try
+        x = rand(20,4)
+        abfopen(temp, "w+") do abf
+            abf["x"] = x
+        end
+
+        abfopen(temp, "r") do abf
+            x = sprint(show,abf)
+            @test x == sprint(show,abf)
+            x = sprint(show, abf.abfkeys["x"])
+            @test x == sprint(show,abf.abfkeys["x"])
+        end
+
+    finally
+        isfile(temp) && rm(temp)
+    end
+end
+
+
 
 
 
