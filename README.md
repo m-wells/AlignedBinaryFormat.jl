@@ -7,7 +7,9 @@ This package provides a simple (yet powerful) interface to handle [memory mapped
 The "data" must be in the form of `Array`s and `BitArray`s) (although I may later support a `Table` interface).
 The `eltype` of the `Array` must be a [Julia primitive type](https://docs.julialang.org/en/v1/manual/types/#Primitive-Types-1).
 When accessing the data we avoid the use of `reinterpret` by **aligning** the arrays on disk.
-Writing `String`s to labels is also supported but these are not memory mapped (use `Vector{Char}` if you need this functionality.
+
+For convenience `String`s `DataType`s, and arbitrary `serialization` can be saved to labels but these are **not** memory mapped.
+If you need a memory mapped string considering using a `Vector{Char}` which can be memory mapped.
 
 ## Usage Example
 
@@ -17,25 +19,47 @@ using AlignedBinaryFormat
 temp = tempname();
 ```
 
+To write out data we do the following.
+
 
 ```julia
-# writing data out
-abfopen(temp, "w") do abf   # "w" is used to write only, memory mapping requires w+
-    write(abf, "my x array", rand(Float16,4))
-    write(abf, "whY array", rand(Char,2,2,2))
-    #close(abf)
-end
+abf = abfopen(temp, "w")                   # "w" is used to write only, memory mapping requires w+
+write(abf, "my x array", rand(Float16,4))
+abf["whY array"] = rand(Char,2,2,2)        # alias of write(abf,"ζ!/b",rand(2,3))
+close(abf)
+```
 
-# do block syntax is supported
-abfopen(temp, "r+") do abf    # "r+" permits writing to an existing file
-    abf["ζ!/b"] = rand(2,3)   # alias of write(abf,"ζ!/b",rand(2,3))
+We could also have used do block syntax
+
+
+```julia
+abfopen(temp, "r+") do abf
+    abf["ζ!/b"] = rand(2,3)
     write(abf, "bitmat", rand(3,2) .< 0.5)
-    # can also save strings (although these are not memory mapped)
-    #     use Vector{Char} for memory mapping
     write(abf, "log", """
         this is what I did
         and how!
         """)
+end
+```
+
+To perform serialization we need to wrap our type with `Serialized`.
+If we are only saving a `DataType` we do not need to wrap it in `Serialized`.
+
+
+```julia
+struct Foo
+    x::Vector{Float64}
+    y::Int
+end
+
+struct Bar
+    x::String
+end
+
+abfopen(temp, "r+") do abf
+    write(abf, "type", Bar)
+    write(abf, "foo", Serialized(Foo(rand(3), -1)))
 end
 
 abf = abfopen(temp, "r")
@@ -44,16 +68,19 @@ abf = abfopen(temp, "r")
 
 
 
-    AlignedBinaryFormat.AbfFile(r <file /tmp/jl_ZRUDdP>)
-    ┌────────────┬────────────────────────┬────────────┐
-    │   label    │          type          │   status   │
-    ├────────────┼────────────────────────┼────────────┤
-    │   bitmat   │   BitArray{2}(3, 2)    │ not loaded │
-    │    log     │      String(28,)       │ not loaded │
-    │ my x array │  Array{Float16,1}(4,)  │ not loaded │
-    │ whY array  │ Array{Char,3}(2, 2, 2) │ not loaded │
-    │    ζ!/b    │ Array{Float64,2}(2, 3) │ not loaded │
-    └────────────┴────────────────────────┴────────────┘
+    AlignedBinaryFormat.AbfFile([read] <file /tmp/jl_OArXMO>)
+    ┌────────────┬──────────────────┬───────────┬────────┬────────────┐
+    │   label    │       type       │   shape   │ bytes  │   status   │
+    ├────────────┼──────────────────┼───────────┼────────┼────────────┤
+    │ bitmat     │ BitArray{2}      │ (3, 2)    │ <8B>   │ unloaded   │
+    │ foo        │ Foo              │ (-1,)     │ <118B> │ unloaded   │
+    │ log        │ String           │ (28,)     │ <112B> │ unloaded   │
+    │ my x array │ Array{Float16,1} │ (4,)      │ <8B>   │ unloaded   │
+    │ type       │ DataType         │ (-1,)     │ <23B>  │ unloaded   │
+    │ whY array  │ Array{Char,3}    │ (2, 2, 2) │ <32B>  │ unloaded   │
+    │ ζ!/b       │ Array{Float64,2} │ (2, 3)    │ <48B>  │ unloaded   │
+    └────────────┴──────────────────┴───────────┴────────┴────────────┘
+
 
 
 
@@ -70,20 +97,23 @@ println(read(abf, "log"))
 show(abf)
 ```
 
-    count(abf["bitmat"]) = 5
+    count(abf["bitmat"]) = 2
     this is what I did
     and how!
     
-    AlignedBinaryFormat.AbfFile(r <file /tmp/jl_ZRUDdP>)
-    ┌────────────┬────────────────────────┬────────────┐
-    │   label    │          type          │   status   │
-    ├────────────┼────────────────────────┼────────────┤
-    │   bitmat   │   BitArray{2}(3, 2)    │   loaded   │
-    │    log     │      String(28,)       │   loaded   │
-    │ my x array │  Array{Float16,1}(4,)  │   loaded   │
-    │ whY array  │ Array{Char,3}(2, 2, 2) │ not loaded │
-    │    ζ!/b    │ Array{Float64,2}(2, 3) │ not loaded │
-    └────────────┴────────────────────────┴────────────┘
+    AlignedBinaryFormat.AbfFile([read] <file /tmp/jl_OArXMO>)
+    ┌────────────┬──────────────────┬───────────┬────────┬────────────┐
+    │   label    │       type       │   shape   │ bytes  │   status   │
+    ├────────────┼──────────────────┼───────────┼────────┼────────────┤
+    │ bitmat     │ BitArray{2}      │ (3, 2)    │ <8B>   │ loaded     │
+    │ foo        │ Foo              │ (-1,)     │ <118B> │ unloaded   │
+    │ log        │ String           │ (28,)     │ <112B> │ loaded     │
+    │ my x array │ Array{Float16,1} │ (4,)      │ <8B>   │ loaded     │
+    │ type       │ DataType         │ (-1,)     │ <23B>  │ unloaded   │
+    │ whY array  │ Array{Char,3}    │ (2, 2, 2) │ <32B>  │ unloaded   │
+    │ ζ!/b       │ Array{Float64,2} │ (2, 3)    │ <48B>  │ unloaded   │
+    └────────────┴──────────────────┴───────────┴────────┴────────────┘
+
 
 In the example above, `bitmat` and `my x array` are memory mapped and `log` is cached.
 Doing `abf["bitmat"]` or `read(abf, "bitmat")` will return the same reference to `bitmat`.
@@ -120,40 +150,42 @@ println("\n")
 ```
 
     x = 10-element Array{Float64,1}:
-     0.8766317610545198  
-     0.6018622110847007  
-     0.11262697157468327 
-     0.5516201293467733  
-     0.25634887547005913 
-     0.049131542030021125
-     0.27887342636826573 
-     0.537853459201793   
-     0.600647015064192   
-     0.18098735180440917 
+     0.13117086919645993
+     0.8140523381099063 
+     0.44152928499795685
+     0.6776307667284676 
+     0.2542185344974299 
+     0.6641164907956227 
+     0.6446525613063578 
+     0.17166524697749908
+     0.0775201232187761 
+     0.6548927372122209 
     
-    AlignedBinaryFormat.AbfFile(w+ <file /tmp/jl_ZRUDdP>)
-    ┌───────┬───────────────────────┬────────┐
-    │ label │         type          │ status │
-    ├───────┼───────────────────────┼────────┤
-    │   x   │ Array{Float64,1}(10,) │ loaded │
-    └───────┴───────────────────────┴────────┘
+    AlignedBinaryFormat.AbfFile([read/write] <file /tmp/jl_OArXMO>)
+    ┌───────┬──────────────────┬───────┬───────┬────────┐
+    │ label │       type       │ shape │ bytes │ status │
+    ├───────┼──────────────────┼───────┼───────┼────────┤
+    │ x     │ Array{Float64,1} │ (10,) │ <80B> │ loaded │
+    └───────┴──────────────────┴───────┴───────┴────────┘
     
-    AlignedBinaryFormat.AbfFile(closed <file /tmp/jl_ZRUDdP>)
-    ┌───────┬──────┬────────┐
-    │ label │ type │ status │
-    ├───────┼──────┼────────┤
-    └───────┴──────┴────────┘
+    
+    AlignedBinaryFormat.AbfFile([closed] <file /tmp/jl_OArXMO>)
+    ┌───────┬──────┬───────┬───────┬────────┐
+    │ label │ type │ shape │ bytes │ status │
+    ├───────┼──────┼───────┼───────┼────────┤
+    └───────┴──────┴───────┴───────┴────────┘
+    
     x = 10-element Array{Float64,1}:
-     0.8766317610545198  
-     0.6018622110847007  
-     0.11262697157468327 
-     0.5516201293467733  
-     0.25634887547005913 
-     0.049131542030021125
-     0.27887342636826573 
-     0.537853459201793   
-     0.600647015064192   
-     0.18098735180440917 
+     0.13117086919645993
+     0.8140523381099063 
+     0.44152928499795685
+     0.6776307667284676 
+     0.2542185344974299 
+     0.6641164907956227 
+     0.6446525613063578 
+     0.17166524697749908
+     0.0775201232187761 
+     0.6548927372122209 
     
 
 
@@ -180,7 +212,7 @@ abfopen(temp, "w") do abf
     try
         x = read(abf, "x")
     catch e
-        println(e.msg)
+        println(e)
     end
 end
 println("\nfile opened with \"w+\"")
@@ -214,7 +246,7 @@ abfopen(temp, "a") do abf
     try
         x = read(abf, "x")
     catch e
-        println(e.msg)
+        println(e)
     end
     write(abf, "z", rand(3))
 end;
@@ -226,27 +258,27 @@ end;
 ```
 
     file opened with "w"
-    file is not readable, opened with: w
+    AlignedBinaryFormat.ReadOnlyError(IOStream(<file /tmp/jl_OArXMO>))
     
     file opened with "w+"
-    x[1] = 0.3921332512881919
+    x[1] = 0.8475538319109697
     x[1] = -1.0
     
     file opened with "r+"
     (abf["x"])[1] = 3.0
-    abf["y"] = [0.3103104232481271, 0.8723026640351457]
+    abf["y"] = [0.5593607069994619, 0.9602697380386047]
     
     file opened with "r"
     x[1] = 3.0
-    abf["y"] = [0.3103104232481271, 0.8723026640351457]
+    abf["y"] = [0.5593607069994619, 0.9602697380386047]
     ReadOnlyMemoryError()
     
     file opened with "a"
-    file is not readable, opened with: a
+    AlignedBinaryFormat.ReadOnlyError(IOStream(<file /tmp/jl_OArXMO>))
     
     file opened with "a+"
     (read(abf, "x"))[1] = 3.0
-    (read(abf, "z"))[1] = 0.11647360741323487
+    (read(abf, "z"))[1] = 0.14952197365579378
 
 
 ## Why not use `JLD/HDF5`?
@@ -313,15 +345,16 @@ abfopen(temp, "w+") do abf
 end;
 ```
 
-    AlignedBinaryFormat.AbfFile(w+ <file /tmp/jl_ZRUDdP>)
-    ┌───────────┬─────────────────────────┬────────────┐
-    │   label   │          type           │   status   │
-    ├───────────┼─────────────────────────┼────────────┤
-    │    log    │       String(36,)       │ not loaded │
-    │    myX    │ Array{Float16,2}(10, 3) │ not loaded │
-    │   somez   │  Array{Float64,1}(29,)  │ not loaded │
-    │ whybitarr │    BitArray{2}(3, 2)    │ not loaded │
-    └───────────┴─────────────────────────┴────────────┘
+    AlignedBinaryFormat.AbfFile([read/write] <file /tmp/jl_OArXMO>)
+    ┌───────────┬──────────────────┬─────────┬────────┬────────────┐
+    │   label   │       type       │  shape  │ bytes  │   status   │
+    ├───────────┼──────────────────┼─────────┼────────┼────────────┤
+    │ log       │ String           │ (36,)   │ <144B> │ unloaded   │
+    │ myX       │ Array{Float16,2} │ (10, 3) │ <60B>  │ unloaded   │
+    │ somez     │ Array{Float64,1} │ (29,)   │ <232B> │ unloaded   │
+    │ whybitarr │ BitArray{2}      │ (3, 2)  │ <8B>   │ unloaded   │
+    └───────────┴──────────────────┴─────────┴────────┴────────────┘
+
 
 The file will have the following layout for each of the stored `Arrays`
 * a `UInt8` indicating endian-ness of the numeric data contained within
