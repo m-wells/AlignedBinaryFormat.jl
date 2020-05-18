@@ -1,4 +1,4 @@
-mutable struct AbfFile
+mutable struct AbfFile <: AbstractDict{String,Any}
     io::IOStream
     abfkeys::Base.ImmutableDict{String,AbfKey}
     loaded::Base.ImmutableDict{String,Any}
@@ -75,6 +75,8 @@ function Base.read(abf::AbfFile, k::String)
 end
 
 Base.getindex(abf::AbfFile, k::String) = read(abf, k)
+Base.iterate(abf::AbfFile, args...) = iterate(abf.abfkeys, args...)
+Base.length(abf::AbfFile) = length(abf.abfkeys)
 
 function Base.setindex!(abf::AbfFile, v, k::String)
     if k ∈ keys(abf)

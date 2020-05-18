@@ -18,7 +18,7 @@ end
 function Base.show(io::IO, a::AbfKey)
     print(io, a.T)
     print(io, " ")
-    if a.T <: AbstractArray
+    if isa(a.T, DataType) && (a.T <: AbstractArray)
         print(io, "(")
         for i in a.shape
             print(io, i, ",")
@@ -109,3 +109,4 @@ function Base.show(io::IO, abf::T) where T<:AbfFile
     tabline(io, dashes, padding; indent = indent, left="└─", center="─┴─", right="─┘")
 end
 
+Base.show(io::IO, ::MIME"text/plain", abf::AbfFile) = show(io, abf)
