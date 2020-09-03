@@ -1,7 +1,12 @@
 # AlignedBinaryFormat
-![Travis (.org)](https://img.shields.io/travis/m-wells/AlignedBinaryFormat.jl?logo=travis&style=for-the-badge)
-![Coveralls github](https://img.shields.io/coveralls/github/m-wells/AlignedBinaryFormat.jl?logo=coveralls&style=for-the-badge)
-![Codecov](https://img.shields.io/codecov/c/github/m-wells/AlignedBinaryFormat.jl?logo=codecov&style=for-the-badge)
+<p>
+    <a href="https://travis-ci.com/github/m-wells/AlignedBinaryFormat.jl" alt="build status">
+        <img src="https://img.shields.io/travis/m-wells/AlignedBinaryFormat.jl?logo=travis&style=for-the-badge" /></a>
+    <a href="https://coveralls.io/github/m-wells/AlignedBinaryFormat.jl" alt="code coverage">
+        <img src="https://img.shields.io/coveralls/github/m-wells/AlignedBinaryFormat.jl?logo=coveralls&style=for-the-badge" /></a>
+    <a href="https://codecov.io/gh/m-wells/AlignedBinaryFormat.jl" alt="code coverage">
+        <img src="https://img.shields.io/codecov/c/github/m-wells/AlignedBinaryFormat.jl?logo=codecov&style=for-the-badge" /></a>
+</p>
 
 This package provides a simple (yet powerful) interface to handle [memory mapped](https://docs.julialang.org/en/v1/stdlib/Mmap/#Memory-mapped-I/O-1) data.
 The "data" must be in the form of `Array`s and `BitArray`s) (although I may later support a `Table` interface).
