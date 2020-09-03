@@ -34,9 +34,18 @@ end
 
 #---------------------------------------------------------------------------------------------------
 
-write_type(io::IOStream, data::T) where T<:Union{BitArray,Array} = write_str(io, string(T))
-write_type(io::IOStream, x::AbstractString) = write_str(io, string(String))
-write_type(io::IOStream, x::DataType) = write_str(io, string(DataType))
+function write_type(io::IOStream, data::BitArray{N}) where N
+    s = "BitArray{"*string(N)*"}"
+    write_str(io, s)
+end
+
+function write_type(io::IOStream, data::Array{T,N}) where {T,N}
+    s = "Array{"*TYPE2STR_LOOKUP[T]*","*string(N)*"}"
+    write_str(io, s)
+end
+
+write_type(io::IOStream, x::AbstractString) = write_str(io, "String")
+write_type(io::IOStream, x::DataType) = write_str(io, "DataType")
 function write_type(io::IOStream, x::AbfSerializer{T}) where T
     write_str(io, "AbfSerializer{"*string(T)*'}')
 end

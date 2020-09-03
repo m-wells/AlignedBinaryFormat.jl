@@ -15,27 +15,46 @@ end
 
 # this is used to avoid evaluation of arbitrary code read from a file
 #TODO maybe do this programatically?
-const TYPELOOKUP = ImmutableDict(string(Float16) => Float16,
-                                 string(Float32) => Float32,
-                                 string(Float64) => Float64,
-                                 string(Bool) => Bool,
-                                 string(Char) => Char,
-                                 string(Int8) => Int8,
-                                 string(UInt8) => UInt8,
-                                 string(Int16) => Int16,
-                                 string(UInt16) => UInt16,
-                                 string(Int32) => Int32,
-                                 string(UInt32) => UInt32,
-                                 string(Int64) => Int64,
-                                 string(UInt64) => UInt64,
-                                 string(Int128) => Int128,
-                                 string(UInt128) => UInt128)
+const TYPELOOKUP = ImmutableDict("Float16" => Float16,
+                                 "Float32" => Float32,
+                                 "Float64" => Float64,
+                                 "Bool" => Bool,
+                                 "Char" => Char,
+                                 "Int8" => Int8,
+                                 "UInt8" => UInt8,
+                                 "Int16" => Int16,
+                                 "UInt16" => UInt16,
+                                 "Int32" => Int32,
+                                 "UInt32" => UInt32,
+                                 "Int64" => Int64,
+                                 "UInt64" => UInt64,
+                                 "Int128" => Int128,
+                                 "UInt128" => UInt128)
+
+const TYPE2STR_LOOKUP = ImmutableDict(
+    Float16 => "Float16",
+    Float32 => "Float32",
+    Float64 => "Float64",
+    Bool => "Bool",
+    Char => "Char",
+    Int8 => "Int8",
+    UInt8 => "UInt8",
+    Int16 => "Int16",
+    UInt16 => "UInt16",
+    Int32 => "Int32",
+    UInt32 => "UInt32",
+    Int64 => "Int64",
+    UInt64 => "UInt64",
+    Int128 => "Int128",
+    UInt128 => "UInt128")
+
+
 
 const ARRAYLOOKUP = ImmutableDict(Base.ImmutableDict{String,Any}(),
-                                  string(Array) => Array,
-                                  string(BitArray) => BitArray,
-                                  string(String) => String,
-                                  string(DataType) => DataType)
+                                  "Array" => Array,
+                                  "BitArray" => BitArray,
+                                  "String" => String,
+                                  "DataType" => DataType)
 
 const PREFIXES = ((1024.0^8, "Yi"),
                   (1024.0^7, "Zi"),
