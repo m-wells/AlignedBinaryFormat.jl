@@ -1,19 +1,32 @@
-write_dims(io::IOStream, x::AbstractArray) = write(io, Int64.(size(x))...)
-write_dims(io::IOStream, x::AbstractString) = write(io, Int64(length(x)))
+write_dims(io::IOStream, x::AbstractArray) = write_or_err(io, Int64.(size(x))...)
+write_dims(io::IOStream, x::AbstractString) = write_or_err(io, Int64(length(x)))
 
 function read_dims(io::IOStream, data::Type{A}) where {T,N,A<:AbstractArray{T,N}}
     ntuple(i -> read(io, Int64), Val(N))
 end
 read_dims(io::IOStream, ::Type{String}) = read(io, Int64)
 
-write_numbytes(io::IOStream, x) = write(io, Int64(numbytes(x)))
+write_numbytes(io::IOStream, x) = write_or_err(io, Int64(numbytes(x)))
+
+_sizeof(x) = sizeof(x)
+_sizeof(x::Char) = sizeof(string(x))
+function write_or_err(io, x)
+    nx = _sizeof(x)
+    n = write(io, x)
+    nx == n || throw("Failed to write $nx-byte representation of $(summary(x)) to $io ($n bytes written).")
+end
+function write_or_err(io, xs...)
+    for x in xs
+        write_or_err(io, x)
+    end
+end
 
 #---------------------------------------------------------------------------------------------------
 
 function write_str(io::IOStream, str::String)
     write_numbytes(io, str)
     for char in str
-        write(io, char)
+        write_or_err(io, char)
     end
 end
 
@@ -130,7 +143,7 @@ function _abfwrite(io::IOStream, data::Union{Array,BitArray})
     write_dims(io, data)
     align(io, data)
     abfkey = AbfKey(io, data)
-    write(io, data)
+    write_or_err(io, data)
     return abfkey
 end
 
@@ -160,12 +173,12 @@ end
 
 function _abfwrite(io::IOStream, T::Union{DataType,AbfSerializer})
     mark(io)
-    write(io, -1)
+    write_or_err(io, -1)
     pos = position(io)
     serialize(io, T)
     abfkey = AbfKey(pos, typeof(T), position(io) - pos)
     reset(io)
-    write(io, abfkey.nbytes)
+    write_or_err(io, abfkey.nbytes)
     skip(io, abfkey.nbytes)
     abfkey
 end

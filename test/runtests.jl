@@ -56,6 +56,12 @@ end
 #    end
 #end
 
+tryrm(path) = try
+    rm(path)
+catch e
+    @info "Failed to remove $path" exception=(e,catch_backtrace())
+end
+
 @testset "public write/read" begin
     temp = tempname()
     try
@@ -91,7 +97,7 @@ end
         end
             
     finally
-        isfile(temp) && rm(temp)
+        isfile(temp) && tryrm(temp)
     end
 end
 
@@ -115,7 +121,7 @@ end
         end
 
     finally
-        isfile(temp) && rm(temp)
+        isfile(temp) && tryrm(temp)
     end
 end
 
@@ -123,20 +129,22 @@ end
     temp = tempname()
     try
         blah = join(rand(Char,10))*join(rand(Char,9))
+        blah = "a∘α"
         x = rand(20,4)
+        key = "blahαש"
         abfopen(temp, "w+") do abf
-            write(abf, "blah", blah)
+            write(abf, key, blah)
             abf["x"] = x
         end
 
         abfopen(temp, "r") do abf
-            _blah = read(abf, "blah")
+            _blah = read(abf, key)
             @test blah == _blah
             @test x == abf["x"]
         end
 
     finally
-        isfile(temp) && rm(temp)
+        isfile(temp) && tryrm(temp)
     end
 end
 
@@ -166,7 +174,7 @@ end
         end
 
     finally
-        isfile(temp) && rm(temp)
+        isfile(temp) && tryrm(temp)
     end
 end
 
@@ -185,9 +193,20 @@ end
         end
 
     finally
-        isfile(temp) && rm(temp)
+        isfile(temp) && tryrm(temp)
     end
 
+    if Sys.islinux()
+        @testset "full device" begin
+            @test_throws Exception abfopen("/dev/full", "w") do abf
+                abf["x"] = rand(10)
+            end
+            # try a larger vector too, where `write` returns 0 rather than throw
+            @test_throws Exception abfopen("/dev/full", "w") do abf
+                abf["x"] = rand(10_000)
+            end
+        end
+    end
 end
 
 
@@ -215,7 +234,7 @@ end
         end
 
     finally
-        isfile(temp) && rm(temp)
+        isfile(temp) && tryrm(temp)
     end
 end
 
