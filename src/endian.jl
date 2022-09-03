@@ -6,9 +6,9 @@ const BIG_ENDFLAG = UInt8(255)
 
 function write_endian(io::IOStream)
     if Base.ENDIAN_BOM == LIT_ENDIAN
-        write(io, LIT_ENDFLAG)
+        write_or_err(io, LIT_ENDFLAG)
     elseif Base.ENDIAN_BOM == BIG_ENDIAN
-        write(io, BIG_ENDFLAG)
+        write_or_err(io, BIG_ENDFLAG)
     else
         error("ENDIAN_BOM of ", Base.ENDIAN_BOM, " not recognized")
     end
