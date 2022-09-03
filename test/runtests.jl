@@ -79,8 +79,6 @@ end
             write(abf, "chars", chars)
             write(abf, "myx", myx)
             write(abf, "blah", blah)
-            write(abf, "f32", f32)
-            write(abf, "i64", i64)
         end
 
         abfopen(temp, "r") do abf
@@ -89,8 +87,6 @@ end
             @test myx == read(abf, "myx")
             @test chars == read(abf, "chars")
             @test f16s == read(abf, "f16s")
-            @test f32 == read(abf, "f32")
-            @test i64 == read(abf, "i64")
 
         end
 
@@ -102,7 +98,7 @@ end
             @test myx == read(abf, "myx")
             @test xyz == read(abf, "xyz")
         end
-            
+
     finally
         isfile(temp) && tryrm(temp)
     end
@@ -215,8 +211,6 @@ end
         end
     end
 end
-
-
 
 # not much of a test set but it will atleast catch method errors
 @testset "show" begin

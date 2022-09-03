@@ -10,19 +10,25 @@ write_numbytes(io::IOStream, x) = write_or_err(io, Int64(numbytes(x)))
 
 _sizeof(x) = sizeof(x)
 _sizeof(x::Char) = sizeof(string(x))
+
 function write_or_err(io, x)
-    nx = _sizeof(x)
-    n = write(io, x)
-    nx == n || throw("Failed to write $nx-byte representation of $(summary(x)) to $io ($n bytes written).")
+    _sizeof(x) === write(io, x) || error(
+        "Failed to write ",
+        nx,
+        "-byte representation of ",
+        summary(x),
+        " to ",
+        io,
+        "(",
+        n,
+        "bytes written).",
+    )
 end
-function write_or_err(io, xs...)
-    for x in xs
-        write_or_err(io, x)
-    end
-end
+write_or_err(io, x...) = foreach(x -> write_or_err(io, x), x)
 
-#---------------------------------------------------------------------------------------------------
-
+#===========================================================================================
+String
+===========================================================================================#
 function write_str(io::IOStream, str::String)
     write_numbytes(io, str)
     for char in str
@@ -45,8 +51,9 @@ function read_str(io::IOStream)
     return join(k)
 end
 
-#---------------------------------------------------------------------------------------------------
-
+#===========================================================================================
+write_type
+===========================================================================================#
 function write_type(io::IOStream, ::BitArray{N}) where N
     s = "BitArray{"*string(N)*"}"
     write_str(io, s)
@@ -57,20 +64,15 @@ function write_type(io::IOStream, ::Array{T,N}) where {T,N}
     write_str(io, s)
 end
 
-function write_type(io::IOStream, ::T) where T<:Union{AbstractFloat, Integer, AbstractChar}
-    write_str(io, TYPE2STR_LOOKUP[T])
-end
-
 write_type(io::IOStream, ::AbstractString) = write_str(io, "String")
 write_type(io::IOStream, ::DataType) = write_str(io, "DataType")
 function write_type(io::IOStream, ::AbfSerializer{T}) where T
     write_str(io, "AbfSerializer{"*string(T)*'}')
 end
 
-#read_type(io::IOStream, ::Type{BitArray}) = BitArray{read(io, Int64)}
-#read_type(io::IOStream, ::Type{Array}) = Array{TYPELOOKUP[read_str(io)], read(io,Int64)}
-#read_type(io::IOStream, ::Type{T}) where T = T
-#read_type(io::IOStream) = read_type(io, ARRAYLOOKUP[read_str(io)])
+#===========================================================================================
+parse_type_*
+===========================================================================================#
 function parse_type_array(x::String)
     a,t,n = split(x, r"[{,}]"; keepempty=false)
     a == "Array" || error("expected Array got ", a)
@@ -92,6 +94,7 @@ function parse_type_serialized(x::String)
     return AbfDeserializer(t)
 end
 
+#---------------------------------------------------------------------------------------------------
 function read_type(io::IOStream)
     x = read_str(io)
     occursin(r"^Array", x) && return parse_type_array(x)
@@ -102,8 +105,9 @@ function read_type(io::IOStream)
     error("the following type is not recognized: ", x)
 end
 
-#---------------------------------------------------------------------------------------------------
-
+#===========================================================================================
+header
+===========================================================================================#
 function write_header(io::IOStream, label::String, x)
     write_endian(io)
     write_str(io, label)
@@ -118,14 +122,15 @@ function read_header(io::IOStream)
     return (label, type)
 end
 
-#---------------------------------------------------------------------------------------------------
-
+#===========================================================================================
+align
+===========================================================================================#
 """
     nbytes is the number of bytes to align too
 """
 function align(io::IOStream, nbytes::Int)
     pos = position(io)
-    aligned_pos = nbytes*ceil(Int, pos/nbytes)  # essentially rounding up to next multiple 
+    aligned_pos = nbytes*ceil(Int, pos/nbytes)  # essentially rounding up to next multiple
     seek(io, aligned_pos)
 end
 # from https://github.com/JuliaLang/julia/blob/master/base/bitarray.jl (2020/01/20)
@@ -141,8 +146,9 @@ align(io::IOStream, ::Type{A}) where {T,A<:Array{T}} = align(io, sizeof(T))
 align(::IOStream, ::Type{String}) = nothing
 align(io::IOStream, ::A) where A<:AbstractArray = align(io,A)
 
-#---------------------------------------------------------------------------------------------------
-
+#===========================================================================================
+read/write Arrays
+===========================================================================================#
 function _abfwrite(io::IOStream, data::Union{Array,BitArray})
     write_dims(io, data)
     align(io, data)
@@ -159,8 +165,9 @@ function _abfread(io::IOStream, type::Type{A}) where A<:AbstractArray
     return abfkey
 end
 
-#---------------------------------------------------------------------------------------------------
-
+#===========================================================================================
+read/write Strings
+===========================================================================================#
 function _abfwrite(io::IOStream, str::AbstractString)
     abfkey = AbfKey(io, str)
     write_str(io, str)
@@ -173,17 +180,9 @@ function _abfread(io::IOStream, ::Type{String})
     return AbfKey(pos, str)
 end
 
-#---------------------------------------------------------------------------------------------------
-
-function _abfwrite(io::IOStream, x::T) where T<:AbstractPrimitive
-    abfkey = AbfKey(io, x)
-    S = TYPE2STR_LOOKUP[T]
-    write(io, )
-    pos = position(io)
-end
-
-#---------------------------------------------------------------------------------------------------
-
+#===========================================================================================
+read/write Union{DataType,AbfSerializer}
+===========================================================================================#
 function _abfwrite(io::IOStream, T::Union{DataType,AbfSerializer})
     mark(io)
     write_or_err(io, -1)
@@ -203,8 +202,9 @@ function _abfread(io::IOStream, T::Union{Type{DataType}, AbfDeserializer})
     AbfKey(pos, T, n)
 end
 
-#---------------------------------------------------------------------------------------------------
-
+#===========================================================================================
+read/write entry points
+===========================================================================================#
 function abfwrite(io::IOStream, label::String, x)
     write_header(io, label, x)
     abfkey = _abfwrite(io, x)
@@ -221,7 +221,7 @@ end
 
 #function abfserialize(io::IOStream, label::String, x::T) where T
 #    pos = position(io)
-#    abfkey = 
+#    abfkey =
 #end
 #
 #function abfdeserialize(io::IOStream, label::String, x)
