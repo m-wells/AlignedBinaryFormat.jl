@@ -123,4 +123,10 @@ struct AbfKey
     
     AbfKey(pos::Int64, T::Union{DataType,AbfSerializer}, nbytes::Int) = new(pos, T, (-1,), nbytes)
     AbfKey(pos::Int64, T::AbfDeserializer, nbytes::Int) = new(pos, T, (-1,), nbytes)
+
+    #-----------------------------------------------------------------------------------------------
+
+    AbfKey(io::IOStream, x::T) where T<:AbstractPrimitive = AbfKey(io, T, (-1,), sizeof(x))
+    AbfKey(pos::Int64, x::T) where T<:AbstractPrimitive = new(pos, T, (-1,), sizeof(x))
+
 end

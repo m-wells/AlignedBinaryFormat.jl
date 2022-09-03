@@ -1,7 +1,7 @@
 write_dims(io::IOStream, x::AbstractArray) = write_or_err(io, Int64.(size(x))...)
 write_dims(io::IOStream, x::AbstractString) = write_or_err(io, Int64(length(x)))
 
-function read_dims(io::IOStream, data::Type{A}) where {T,N,A<:AbstractArray{T,N}}
+function read_dims(io::IOStream, ::Type{A}) where {T,N,A<:AbstractArray{T,N}}
     ntuple(i -> read(io, Int64), Val(N))
 end
 read_dims(io::IOStream, ::Type{String}) = read(io, Int64)
@@ -47,19 +47,23 @@ end
 
 #---------------------------------------------------------------------------------------------------
 
-function write_type(io::IOStream, data::BitArray{N}) where N
+function write_type(io::IOStream, ::BitArray{N}) where N
     s = "BitArray{"*string(N)*"}"
     write_str(io, s)
 end
 
-function write_type(io::IOStream, data::Array{T,N}) where {T,N}
+function write_type(io::IOStream, ::Array{T,N}) where {T,N}
     s = "Array{"*TYPE2STR_LOOKUP[T]*","*string(N)*"}"
     write_str(io, s)
 end
 
-write_type(io::IOStream, x::AbstractString) = write_str(io, "String")
-write_type(io::IOStream, x::DataType) = write_str(io, "DataType")
-function write_type(io::IOStream, x::AbfSerializer{T}) where T
+function write_type(io::IOStream, ::T) where T<:Union{AbstractFloat, Integer, AbstractChar}
+    write_str(io, TYPE2STR_LOOKUP[T])
+end
+
+write_type(io::IOStream, ::AbstractString) = write_str(io, "String")
+write_type(io::IOStream, ::DataType) = write_str(io, "DataType")
+function write_type(io::IOStream, ::AbfSerializer{T}) where T
     write_str(io, "AbfSerializer{"*string(T)*'}')
 end
 
@@ -134,7 +138,7 @@ end
 # over `Array{Bool, N}` and allowing some operations to work on 64 values at once.
 align(io::IOStream, ::Type{A}) where A<:BitArray = align(io, 8)
 align(io::IOStream, ::Type{A}) where {T,A<:Array{T}} = align(io, sizeof(T))
-align(io::IOStream, ::Type{String}) = nothing
+align(::IOStream, ::Type{String}) = nothing
 align(io::IOStream, ::A) where A<:AbstractArray = align(io,A)
 
 #---------------------------------------------------------------------------------------------------
@@ -167,6 +171,15 @@ function _abfread(io::IOStream, ::Type{String})
     pos = position(io)
     str = read_str(io)
     return AbfKey(pos, str)
+end
+
+#---------------------------------------------------------------------------------------------------
+
+function _abfwrite(io::IOStream, x::T) where T<:AbstractPrimitive
+    abfkey = AbfKey(io, x)
+    S = TYPE2STR_LOOKUP[T]
+    write(io, )
+    pos = position(io)
 end
 
 #---------------------------------------------------------------------------------------------------

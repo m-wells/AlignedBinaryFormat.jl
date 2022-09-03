@@ -67,16 +67,20 @@ end
     try
         myx = rand(UInt32, 4,6,2)
         μy1234_ = rand(20) .< 0.5
-        f16 = rand(Float16,100)
+        f16s = rand(Float16,100)
         blah = rand(20,4,1)
         chars = rand(Char, 11,2)
+        f32 = 1f0
+        i64 = 42
 
         abfopen(temp, "w") do abf
-            abf["f16"] = f16
+            abf["f16s"] = f16s
             write(abf, "μy1234_", μy1234_)
             write(abf, "chars", chars)
             write(abf, "myx", myx)
             write(abf, "blah", blah)
+            write(abf, "f32", f32)
+            write(abf, "i64", i64)
         end
 
         abfopen(temp, "r") do abf
@@ -84,7 +88,10 @@ end
             @test blah == read(abf, "blah")
             @test myx == read(abf, "myx")
             @test chars == read(abf, "chars")
-            @test f16 == read(abf, "f16")
+            @test f16s == read(abf, "f16s")
+            @test f32 == read(abf, "f32")
+            @test i64 == read(abf, "i64")
+
         end
 
         xyz = rand(10)

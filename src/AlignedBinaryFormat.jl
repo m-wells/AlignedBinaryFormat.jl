@@ -8,6 +8,8 @@ export abfopen, AbfSerializer
 
 #---------------------------------------------------------------------------------------------------
 
+const AbstractPrimitive = Union{AbstractFloat, Integer, AbstractChar}
+
 struct AbfReadError <: Exception
     io::IOStream
 end
