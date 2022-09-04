@@ -1,8 +1,17 @@
 using Test
 using AlignedBinaryFormat
-using AlignedBinaryFormat: AbfFile, write_str, read_str, write_type, read_type, AbfReadError,
-                           AbfWriteError
+using AlignedBinaryFormat: AbfFile, AbfReadError, AbfWriteError
+using AlignedBinaryFormat: read_str, write_str
+using AlignedBinaryFormat: write_type, read_type
 
+tryrm(path) = try rm(path)
+catch e
+    @info "Failed to remove $path" exception=(e,catch_backtrace())
+end
+
+#===========================================================================================
+open/close
+===========================================================================================#
 @testset "open/close" begin
     temp = tempname()
     try
@@ -26,42 +35,9 @@ using AlignedBinaryFormat: AbfFile, write_str, read_str, write_type, read_type, 
     end
 end
 
-#@testset "internal write/read" begin
-#    temp = tempname()
-#    try
-#        str = "μnicode"
-#        x = rand(UInt32, 4,6,2)
-#        y = rand(20) .< 0.5
-#        abfopen(temp, "w") do abf
-#            write_str(abf.io, str)
-#            write_type(abf.io, x)
-#            write_size(abf.io, x)
-#            write_type(abf.io, y)
-#            write_size(abf.io, y)
-#        end
-#
-#        abfopen(temp, "r") do abf
-#            @test str == read_str(abf.io)
-#            t = read_type(abf.io)
-#            s = read_size(abf.io, t)
-#            @test typeof(x) == t
-#            @test size(x) == s
-#            t = read_type(abf.io)
-#            s = read_size(abf.io, t)
-#            @test typeof(y) == t
-#            @test size(y) == s
-#        end
-#    finally
-#        isfile(temp) && rm(temp)
-#    end
-#end
-
-tryrm(path) = try
-    rm(path)
-catch e
-    @info "Failed to remove $path" exception=(e,catch_backtrace())
-end
-
+#===========================================================================================
+public write/read
+===========================================================================================#
 @testset "public write/read" begin
     temp = tempname()
     try
@@ -104,6 +80,9 @@ end
     end
 end
 
+#===========================================================================================
+ondisk modification
+===========================================================================================#
 @testset "ondisk modification" begin
     temp = tempname()
     try
@@ -128,6 +107,9 @@ end
     end
 end
 
+#===========================================================================================
+read/write strings as data
+===========================================================================================#
 @testset "read/write strings as data" begin
     temp = tempname()
     try
@@ -151,6 +133,9 @@ end
     end
 end
 
+#===========================================================================================
+read/write datatypes/serialized
+===========================================================================================#
 struct Foo
     x::Vector{Float64}
     y::Int64
@@ -181,6 +166,9 @@ end
     end
 end
 
+#===========================================================================================
+exception handling
+===========================================================================================#
 @testset "exception handling" begin
     temp = tempname()
     try
@@ -212,7 +200,9 @@ end
     end
 end
 
-# not much of a test set but it will atleast catch method errors
+#===========================================================================================
+not much of a test set but it will at least catch method errors
+===========================================================================================#
 @testset "show" begin
     temp = tempname()
     try
@@ -239,33 +229,17 @@ end
     end
 end
 
-
-
-
-
-
-
-#@testset "write/read" begin
-#    temp = tempname()
-#    try
-#        abfopen(temp, "w") do abf
-#            write(abf, "f64", rand(Float16,10,3))
-#            write(abf, "hello", rand(UInt128,10,3,7))
-#            write(abf, "μnicode", rand(10) .< 0.5)
-#        end
-#
-#        abfopen(temp, "r") do abf
-#
-#        end
-#        @test isfile(temp)
-#
-#        abf = abfopen(temp, "r+")
-#        @test isa(abf, AbfFile)
-#        close(abf)
-#        @test isfile(temp)
-#
-#    finally
-#        isfile(temp) && rm(temp)
-#    end
-#end
-
+#===========================================================================================
+AbstractDict Interface
+===========================================================================================#
+@testset "AbstractDict Interface" begin
+    tmp = tempname()
+    abfopen(tmp, "w") do abf
+        abf["k"] = rand(10)
+    end
+    abfopen(tmp, "r") do abf
+        k, v = first(abf)
+        @test k === "k"             # issue 4
+        @test v === abf["k"]        # issue 4
+    end
+end

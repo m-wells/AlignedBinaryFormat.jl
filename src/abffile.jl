@@ -1,23 +1,25 @@
-mutable struct AbfFile <: AbstractDict{String,Any}
+struct AbfFile <: AbstractDict{String, Any}
     io::IOStream
-    abfkeys::Base.ImmutableDict{String,AbfKey}
-    loaded::Base.ImmutableDict{String,Any}
-    #loaded::Base.ImmutableDict{String,Union{Array,BitArray,String}}
+    abfkeys::OrderedDict{String, AbfKey}
+    loaded::Dict{String, Any}
 
     function AbfFile(io::IOStream)
-        abfkeys=Base.ImmutableDict{String,AbfKey}()
-        loaded=Base.ImmutableDict{String,Any}()
+        abfkeys = OrderedDict{String, AbfKey}()
+        loaded = Dict{String, Any}()
         new(io, abfkeys, loaded)
     end
-
-    AbfFile(filename::String, rw::String) = AbfFile(open(filename, rw))
 end
 
-Base.keys(abf::AbfFile) = keys(abf.abfkeys)
+AbfFile(filename::String, rw::String) = AbfFile(open(filename, rw))
+
+function Base.in(k::String, v::Base.KeySet{String, AbfFile})
+    abf = v.dict
+    in(k, keys(getfield(abf, :abfkeys)))
+end
 
 function addabfkey!(abf::AbfFile, k::String, abfkey::AbfKey)
     k ∈ keys(abf) && error("key of \"", k, "\" already exists in file!")
-    abf.abfkeys = Base.ImmutableDict(abf.abfkeys, k => abfkey)
+    abf.abfkeys[k] = abfkey
 end
 
 function abfopen(filename::String, rw::String)
@@ -33,16 +35,14 @@ function abfopen(filename::String, rw::String)
 end
 
 function Base.close(abf::AbfFile)
-    abf.abfkeys = Base.ImmutableDict{String,AbfKey}()
-    abf.loaded = Base.ImmutableDict{String,Any}()
+    empty!(abf.abfkeys)
+    empty!(abf.loaded)
     close(abf.io)
 end
 
 function abfopen(f::Function, args...)
     abf = abfopen(args...)
-
-    try
-        f(abf)
+    try f(abf)
     finally
         close(abf)
     end
@@ -70,18 +70,25 @@ function Base.read(abf::AbfFile, k::String)
     else
         x = Mmap.mmap(abf.io, abfkey.T, abfkey.shape)
     end
-    abf.loaded = Base.ImmutableDict(abf.loaded, k => x)
+    abf.loaded[k] = x
     return x
 end
 
 Base.getindex(abf::AbfFile, k::String) = read(abf, k)
-Base.iterate(abf::AbfFile, args...) = iterate(abf.abfkeys, args...)
 Base.length(abf::AbfFile) = length(abf.abfkeys)
 
+function Base.iterate(abf::AbfFile, state = 1)
+    next = iterate(abf.abfkeys, state)
+    isnothing(next) && return nothing
+    (key, _), next_state = next
+    return key => abf[key], next_state
+end
+
 function Base.setindex!(abf::AbfFile, v, k::String)
-    if k ∈ keys(abf)
-        error("cannot overwrite existing key. You may have wanted to do \"abf[", k,
-              "] .= x\" instead (element assignment)")
-    end
+    k ∈ keys(abf) && error(
+        "cannot overwrite existing key. You may have wanted to do \"abf[",
+        k,
+        "] .= x\" instead (element assignment)",
+    )
     write(abf, k, v)
 end
