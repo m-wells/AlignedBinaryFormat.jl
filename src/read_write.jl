@@ -12,7 +12,9 @@ _sizeof(x) = sizeof(x)
 _sizeof(x::Char) = sizeof(string(x))
 
 function write_or_err(io, x)
-    _sizeof(x) === write(io, x) || error(
+    nx = _sizeof(x)
+    n = write(io, x)
+    nx == n || error(
         "Failed to write ",
         nx,
         "-byte representation of ",
@@ -21,7 +23,7 @@ function write_or_err(io, x)
         io,
         "(",
         n,
-        "bytes written).",
+        " bytes written).",
     )
 end
 write_or_err(io, x...) = foreach(x -> write_or_err(io, x), x)

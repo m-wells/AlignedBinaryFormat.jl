@@ -187,15 +187,26 @@ exception handling
         isfile(temp) && tryrm(temp)
     end
 
-    if Sys.islinux()
-        @testset "full device" begin
-            @test_throws Exception abfopen("/dev/full", "w") do abf
-                abf["x"] = rand(10)
+    @testset "full device" begin
+        if Sys.islinux()
+            # When writing to a full device, `Base.write` throws a `SystemError` ("No space left on device") 
+            # for small arrays, but returns 0 for larger arrays, in which case the error is caught
+            # by `abfopen` and thrown as an `ErrorException`. See julia issue #44535.
+            for sz in (10, 10_000)
+                err_message = nothing
+                try
+                    abfopen("/dev/full", "w") do abf
+                        abf["x"] = rand(sz)
+                    end
+                catch err
+                    err_message = sprint(showerror, err)
+                end
+                @test err_message !== nothing && 
+                    (contains(err_message, "No space left on device") ||
+                     contains(err_message, "Failed to write"))
             end
-            # try a larger vector too, where `write` returns 0 rather than throw
-            @test_throws Exception abfopen("/dev/full", "w") do abf
-                abf["x"] = rand(10_000)
-            end
+        else
+            @test_broken "Skipping full device test on Windows"
         end
     end
 end
